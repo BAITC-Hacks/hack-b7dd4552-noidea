@@ -1,0 +1,1090 @@
+{
+  "items": [
+    {
+      "turbine_id": 2,
+      "name": "Первый",
+      "manifest": {
+        "format_version": 1,
+        "artifact_version": 1,
+        "model_type": "telemetry_hist_gradient_boosting",
+        "promoted": true,
+        "turbine_id": 2,
+        "source_sha256": "820578cd18bb557cd30c2e102f3ae5a386dfc6c489a5a15743339c2b017305e5",
+        "timezone": "Etc/GMT-6",
+        "timestamp_semantics": "interval_end",
+        "feature_columns": [
+          "last_power",
+          "last_wind_speed",
+          "last_temperature",
+          "lag_age_hours",
+          "power_lag_1h",
+          "power_lag_6h",
+          "power_lag_24h",
+          "wind_speed_lag_1h",
+          "wind_speed_lag_6h",
+          "wind_speed_lag_24h",
+          "temperature_lag_1h",
+          "temperature_lag_6h",
+          "temperature_lag_24h",
+          "power_mean_6h",
+          "power_std_6h",
+          "power_mean_24h",
+          "power_std_24h",
+          "wind_speed_mean_6h",
+          "wind_speed_std_6h",
+          "wind_speed_mean_24h",
+          "wind_speed_std_24h",
+          "temperature_mean_6h",
+          "temperature_std_6h",
+          "temperature_mean_24h",
+          "temperature_std_24h",
+          "complete_hours_6h",
+          "complete_hours_24h",
+          "horizon_hours",
+          "hour_sin",
+          "hour_cos",
+          "day_of_year_sin",
+          "day_of_year_cos"
+        ],
+        "horizons": [
+          1,
+          48
+        ],
+        "horizon_max": 48,
+        "usable_from": "2026-01-01T00:00:00+00:00",
+        "trained_at": "2026-09-23T11:50:33.948677+00:00",
+        "training_end": "2025-10-01T00:00:00+00:00",
+        "validation_end": "2026-01-01T00:00:00+00:00",
+        "control_end": "2026-02-01T00:00:00+00:00",
+        "test_end": "2026-02-01T00:00:00+00:00",
+        "model_sha256": "d15db7aa53f59ca4383d8bac1bca90782be79c9445a5cc11e723deb67e98fd38",
+        "report_sha256": "7976e8ad52a2a995b46820d77ac218a52feb9eb308ba26133774d2eea767c667",
+        "fit_rows_sha256": "2cdb7af6552303ad0717e8fae4e941125ed7a7b9b3be270b790d72b6fadfb181",
+        "sklearn_version": "1.9.1",
+        "validation_mae": 0.3074587046301635,
+        "persistence_validation_mae": 0.3489279316933365,
+        "weather_used": false,
+        "independent_untouched_test_available": false
+      },
+      "report": {
+        "model_type": "telemetry_hist_gradient_boosting",
+        "parameters": {
+          "loss": "absolute_error",
+          "learning_rate": 0.06,
+          "max_iter": 120,
+          "max_leaf_nodes": 15,
+          "min_samples_leaf": 40,
+          "l2_regularization": 1.0,
+          "early_stopping": false,
+          "random_state": 42
+        },
+        "split_boundaries": {
+          "train_end": "2025-10-01T00:00:00+00:00",
+          "validation_end": "2026-01-01T00:00:00+00:00",
+          "control_end": "2026-02-01T00:00:00+00:00"
+        },
+        "splits": {
+          "train": {
+            "rows": 173255,
+            "unique_target_hours": 21896,
+            "unique_issue_times": 3689,
+            "issue_min": "2023-03-11T00:00:00+00:00",
+            "issue_max": "2025-09-30T18:00:00+00:00",
+            "target_min": "2023-03-11T01:00:00+00:00",
+            "target_max": "2025-09-30T23:00:00+00:00",
+            "target_available_at_max": "2025-10-01T00:00:00+00:00",
+            "feature_available_at_max": "2025-09-30T18:00:00+00:00",
+            "unique_target_sha256": "554d8c34f34f38586098a899ba8d0ce8e230866dba43cead902265989c0304cd"
+          },
+          "validation": {
+            "rows": 16748,
+            "unique_target_hours": 2135,
+            "unique_issue_times": 359,
+            "issue_min": "2025-10-01T00:00:00+00:00",
+            "issue_max": "2025-12-31T18:00:00+00:00",
+            "target_min": "2025-10-01T01:00:00+00:00",
+            "target_max": "2025-12-31T23:00:00+00:00",
+            "target_available_at_max": "2026-01-01T00:00:00+00:00",
+            "feature_available_at_max": "2025-12-31T18:00:00+00:00",
+            "unique_target_sha256": "9a59ee6ec85d884460f5c218a2e5d178d9c0d497ff02065729add2a0a2b1c69e"
+          },
+          "control": {
+            "rows": 5720,
+            "unique_target_hours": 736,
+            "unique_issue_times": 123,
+            "issue_min": "2026-01-01T00:00:00+00:00",
+            "issue_max": "2026-01-31T12:00:00+00:00",
+            "target_min": "2026-01-01T01:00:00+00:00",
+            "target_max": "2026-01-31T16:00:00+00:00",
+            "target_available_at_max": "2026-01-31T17:00:00+00:00",
+            "feature_available_at_max": "2026-01-31T12:00:00+00:00",
+            "unique_target_sha256": "8cd188c413c3e9eb4e68ba6253a8350aeb1b16425de3da70ae646906c529d433"
+          }
+        },
+        "target_overlap_counts": {
+          "train_validation": 0,
+          "train_control": 0,
+          "validation_control": 0
+        },
+        "feature_availability_violations": 0,
+        "fit_labels_available_at_max": "2025-10-01T00:00:00+00:00",
+        "fit_labels_available_by_train_end": true,
+        "validation": {
+          "all": {
+            "rows": 16748,
+            "model": {
+              "mae": 0.3074587046301635,
+              "rmse": 0.360090352177664
+            },
+            "persistence": {
+              "mae": 0.3489279316933365,
+              "rmse": 0.470894983469039
+            }
+          },
+          "1_24h": {
+            "rows": 8468,
+            "model": {
+              "mae": 0.2930079634701259,
+              "rmse": 0.34827338868109387
+            },
+            "persistence": {
+              "mae": 0.3135210990395213,
+              "rmse": 0.43640491682635857
+            }
+          },
+          "25_48h": {
+            "rows": 8280,
+            "model": {
+              "mae": 0.32223755440591206,
+              "rmse": 0.37178734481381376
+            },
+            "persistence": {
+              "mae": 0.3851386876006442,
+              "rmse": 0.5037315089461911
+            }
+          }
+        },
+        "control": {
+          "all": {
+            "rows": 5720,
+            "model": {
+              "mae": 0.28176666098770126,
+              "rmse": 0.3479640453662283
+            },
+            "persistence": {
+              "mae": 0.33365326340326334,
+              "rmse": 0.4552149084326686
+            }
+          },
+          "1_24h": {
+            "rows": 2908,
+            "model": {
+              "mae": 0.2673495576697061,
+              "rmse": 0.33693139469881644
+            },
+            "persistence": {
+              "mae": 0.3135167354424576,
+              "rmse": 0.44300459158393674
+            }
+          },
+          "25_48h": {
+            "rows": 2812,
+            "model": {
+              "mae": 0.2966759555996251,
+              "rmse": 0.3590169265779044
+            },
+            "persistence": {
+              "mae": 0.35447724039829304,
+              "rmse": 0.46750677318913203
+            }
+          }
+        },
+        "test": {
+          "all": {
+            "rows": 5720,
+            "model": {
+              "mae": 0.28176666098770126,
+              "rmse": 0.3479640453662283
+            },
+            "persistence": {
+              "mae": 0.33365326340326334,
+              "rmse": 0.4552149084326686
+            }
+          },
+          "1_24h": {
+            "rows": 2908,
+            "model": {
+              "mae": 0.2673495576697061,
+              "rmse": 0.33693139469881644
+            },
+            "persistence": {
+              "mae": 0.3135167354424576,
+              "rmse": 0.44300459158393674
+            }
+          },
+          "25_48h": {
+            "rows": 2812,
+            "model": {
+              "mae": 0.2966759555996251,
+              "rmse": 0.3590169265779044
+            },
+            "persistence": {
+              "mae": 0.35447724039829304,
+              "rmse": 0.46750677318913203
+            }
+          }
+        },
+        "promotion": {
+          "promoted": true,
+          "criterion": "validation MAE strictly below persistence MAE",
+          "frozen_before_control_metrics": true,
+          "refit_after_selection": false
+        },
+        "exclusions": {
+          "requested_rows": 203136,
+          "reasons": {
+            "missing_target": 4181,
+            "stale_measurements": 2832,
+            "missing_history": 48
+          },
+          "crossing_split_boundary_or_outside_window": 352,
+          "incomplete_hours": 607,
+          "dropped_ambiguous_or_nonexistent_labels": 0
+        },
+        "data_assessment": {
+          "weather_used": false,
+          "telemetry_only": true,
+          "timezone_is_user_assumption": true,
+          "timestamps_assumed_instantly_available": true,
+          "source_period_start": "2023-03-10T17:00:00+00:00",
+          "source_period_end": "2026-01-31T17:00:00+00:00",
+          "complete_hours": 24786,
+          "complete_hour_fraction": 0.9760957744260229,
+          "unique_turbines": 1,
+          "forecast_horizons": [
+            1,
+            48
+          ],
+          "issue_stride_hours": 6,
+          "independent_untouched_test_available": false,
+          "control_warning": "January 2026 was inspected during timezone analysis. This is a retrospective control, not an untouched final test. February-or-later labels are needed for an independent final test. Temporal row leakage is checked separately."
+        },
+        "fit_rows_sha256": "2cdb7af6552303ad0717e8fae4e941125ed7a7b9b3be270b790d72b6fadfb181"
+      }
+    },
+    {
+      "turbine_id": 2,
+      "name": "Первый",
+      "manifest": {
+        "format_version": 1,
+        "artifact_version": 1,
+        "model_type": "telemetry_hist_gradient_boosting",
+        "promoted": true,
+        "turbine_id": 2,
+        "source_sha256": "820578cd18bb557cd30c2e102f3ae5a386dfc6c489a5a15743339c2b017305e5",
+        "timezone": "Etc/GMT-6",
+        "timestamp_semantics": "interval_start",
+        "feature_columns": [
+          "last_power",
+          "last_wind_speed",
+          "last_temperature",
+          "lag_age_hours",
+          "power_lag_1h",
+          "power_lag_6h",
+          "power_lag_24h",
+          "wind_speed_lag_1h",
+          "wind_speed_lag_6h",
+          "wind_speed_lag_24h",
+          "temperature_lag_1h",
+          "temperature_lag_6h",
+          "temperature_lag_24h",
+          "power_mean_6h",
+          "power_std_6h",
+          "power_mean_24h",
+          "power_std_24h",
+          "wind_speed_mean_6h",
+          "wind_speed_std_6h",
+          "wind_speed_mean_24h",
+          "wind_speed_std_24h",
+          "temperature_mean_6h",
+          "temperature_std_6h",
+          "temperature_mean_24h",
+          "temperature_std_24h",
+          "complete_hours_6h",
+          "complete_hours_24h",
+          "horizon_hours",
+          "hour_sin",
+          "hour_cos",
+          "day_of_year_sin",
+          "day_of_year_cos"
+        ],
+        "horizons": [
+          1,
+          48
+        ],
+        "horizon_max": 48,
+        "usable_from": "2026-01-01T00:00:00+00:00",
+        "trained_at": "2026-09-23T11:50:22.849922+00:00",
+        "training_end": "2025-10-01T00:00:00+00:00",
+        "validation_end": "2026-01-01T00:00:00+00:00",
+        "control_end": "2026-02-01T00:00:00+00:00",
+        "test_end": "2026-02-01T00:00:00+00:00",
+        "model_sha256": "611f4b5f32ca946549b0480d4d71ed1ba232193ce261cb4b21055bd35791dde2",
+        "report_sha256": "e697bd6823e8f13f9687cd5ef9394064db7eabfcca5164656c2c5f00ec03ab3e",
+        "fit_rows_sha256": "93d1217091cb62ec73c1442d4a04a1121a799554eb66e1b34879e36f67749091",
+        "sklearn_version": "1.9.1",
+        "validation_mae": 0.30582652264983723,
+        "persistence_validation_mae": 0.35027548949379184,
+        "weather_used": false,
+        "independent_untouched_test_available": false
+      },
+      "report": {
+        "model_type": "telemetry_hist_gradient_boosting",
+        "parameters": {
+          "loss": "absolute_error",
+          "learning_rate": 0.06,
+          "max_iter": 120,
+          "max_leaf_nodes": 15,
+          "min_samples_leaf": 40,
+          "l2_regularization": 1.0,
+          "early_stopping": false,
+          "random_state": 42
+        },
+        "split_boundaries": {
+          "train_end": "2025-10-01T00:00:00+00:00",
+          "validation_end": "2026-01-01T00:00:00+00:00",
+          "control_end": "2026-02-01T00:00:00+00:00"
+        },
+        "splits": {
+          "train": {
+            "rows": 173222,
+            "unique_target_hours": 21894,
+            "unique_issue_times": 3689,
+            "issue_min": "2023-03-11T00:00:00+00:00",
+            "issue_max": "2025-09-30T18:00:00+00:00",
+            "target_min": "2023-03-11T01:00:00+00:00",
+            "target_max": "2025-09-30T23:00:00+00:00",
+            "target_available_at_max": "2025-10-01T00:00:00+00:00",
+            "feature_available_at_max": "2025-09-30T18:00:00+00:00",
+            "unique_target_sha256": "4b2ab81a0521a7a24eab6ed4fe2c66aabfb416dd662c6a8cdf300ad5f693fe7b"
+          },
+          "validation": {
+            "rows": 16752,
+            "unique_target_hours": 2135,
+            "unique_issue_times": 359,
+            "issue_min": "2025-10-01T00:00:00+00:00",
+            "issue_max": "2025-12-31T18:00:00+00:00",
+            "target_min": "2025-10-01T01:00:00+00:00",
+            "target_max": "2025-12-31T23:00:00+00:00",
+            "target_available_at_max": "2026-01-01T00:00:00+00:00",
+            "feature_available_at_max": "2025-12-31T18:00:00+00:00",
+            "unique_target_sha256": "eae0340825e1beaf8c58767ac14dfea7d2443bbd5abe81bb66b94aa89f9470b9"
+          },
+          "control": {
+            "rows": 5728,
+            "unique_target_hours": 737,
+            "unique_issue_times": 123,
+            "issue_min": "2026-01-01T00:00:00+00:00",
+            "issue_max": "2026-01-31T12:00:00+00:00",
+            "target_min": "2026-01-01T01:00:00+00:00",
+            "target_max": "2026-01-31T17:00:00+00:00",
+            "target_available_at_max": "2026-01-31T18:00:00+00:00",
+            "feature_available_at_max": "2026-01-31T12:00:00+00:00",
+            "unique_target_sha256": "3a1d0e58f3da93068bb57b9367955d7910ea412fa1891e6bbaf74d4af130f8be"
+          }
+        },
+        "target_overlap_counts": {
+          "train_validation": 0,
+          "train_control": 0,
+          "validation_control": 0
+        },
+        "feature_availability_violations": 0,
+        "fit_labels_available_at_max": "2025-10-01T00:00:00+00:00",
+        "fit_labels_available_by_train_end": true,
+        "validation": {
+          "all": {
+            "rows": 16752,
+            "model": {
+              "mae": 0.30582652264983723,
+              "rmse": 0.3584526220201157
+            },
+            "persistence": {
+              "mae": 0.35027548949379184,
+              "rmse": 0.4728254476847643
+            }
+          },
+          "1_24h": {
+            "rows": 8468,
+            "model": {
+              "mae": 0.28999793324974643,
+              "rmse": 0.3453348888912163
+            },
+            "persistence": {
+              "mae": 0.3145034246575343,
+              "rmse": 0.4384355339234123
+            }
+          },
+          "25_48h": {
+            "rows": 8284,
+            "model": {
+              "mae": 0.32200668863727916,
+              "rmse": 0.3713831412760124
+            },
+            "persistence": {
+              "mae": 0.38684210526315793,
+              "rmse": 0.5055671651039516
+            }
+          }
+        },
+        "control": {
+          "all": {
+            "rows": 5728,
+            "model": {
+              "mae": 0.2842770775304686,
+              "rmse": 0.3494658286075022
+            },
+            "persistence": {
+              "mae": 0.33420303770949716,
+              "rmse": 0.45637508542296307
+            }
+          },
+          "1_24h": {
+            "rows": 2912,
+            "model": {
+              "mae": 0.2706637125486403,
+              "rmse": 0.33931598240227
+            },
+            "persistence": {
+              "mae": 0.3139302884615385,
+              "rmse": 0.4436433656207197
+            }
+          },
+          "25_48h": {
+            "rows": 2816,
+            "model": {
+              "mae": 0.29835453450031374,
+              "rmse": 0.35966056965491033
+            },
+            "persistence": {
+              "mae": 0.3551669034090909,
+              "rmse": 0.4691776227090161
+            }
+          }
+        },
+        "test": {
+          "all": {
+            "rows": 5728,
+            "model": {
+              "mae": 0.2842770775304686,
+              "rmse": 0.3494658286075022
+            },
+            "persistence": {
+              "mae": 0.33420303770949716,
+              "rmse": 0.45637508542296307
+            }
+          },
+          "1_24h": {
+            "rows": 2912,
+            "model": {
+              "mae": 0.2706637125486403,
+              "rmse": 0.33931598240227
+            },
+            "persistence": {
+              "mae": 0.3139302884615385,
+              "rmse": 0.4436433656207197
+            }
+          },
+          "25_48h": {
+            "rows": 2816,
+            "model": {
+              "mae": 0.29835453450031374,
+              "rmse": 0.35966056965491033
+            },
+            "persistence": {
+              "mae": 0.3551669034090909,
+              "rmse": 0.4691776227090161
+            }
+          }
+        },
+        "promotion": {
+          "promoted": true,
+          "criterion": "validation MAE strictly below persistence MAE",
+          "frozen_before_control_metrics": true,
+          "refit_after_selection": false
+        },
+        "exclusions": {
+          "requested_rows": 203088,
+          "reasons": {
+            "missing_target": 4250,
+            "stale_measurements": 2784
+          },
+          "crossing_split_boundary_or_outside_window": 352,
+          "incomplete_hours": 607,
+          "dropped_ambiguous_or_nonexistent_labels": 0
+        },
+        "data_assessment": {
+          "weather_used": false,
+          "telemetry_only": true,
+          "timezone_is_user_assumption": true,
+          "timestamps_assumed_instantly_available": true,
+          "source_period_start": "2023-03-10T18:00:00+00:00",
+          "source_period_end": "2026-01-31T17:00:00+00:00",
+          "complete_hours": 24785,
+          "complete_hour_fraction": 0.9760948330182735,
+          "unique_turbines": 1,
+          "forecast_horizons": [
+            1,
+            48
+          ],
+          "issue_stride_hours": 6,
+          "independent_untouched_test_available": false,
+          "control_warning": "January 2026 was inspected during timezone analysis. This is a retrospective control, not an untouched final test. February-or-later labels are needed for an independent final test. Temporal row leakage is checked separately."
+        },
+        "fit_rows_sha256": "93d1217091cb62ec73c1442d4a04a1121a799554eb66e1b34879e36f67749091"
+      }
+    },
+    {
+      "turbine_id": 3,
+      "name": "Второй",
+      "manifest": {
+        "format_version": 1,
+        "artifact_version": 1,
+        "model_type": "telemetry_hist_gradient_boosting",
+        "promoted": true,
+        "turbine_id": 3,
+        "source_sha256": "c4c341582fb2dd348b7187f0128cff265fe055f469413871ebb5db50eef58b5b",
+        "timezone": "Etc/GMT-6",
+        "timestamp_semantics": "interval_end",
+        "feature_columns": [
+          "last_power",
+          "last_wind_speed",
+          "last_temperature",
+          "lag_age_hours",
+          "power_lag_1h",
+          "power_lag_6h",
+          "power_lag_24h",
+          "wind_speed_lag_1h",
+          "wind_speed_lag_6h",
+          "wind_speed_lag_24h",
+          "temperature_lag_1h",
+          "temperature_lag_6h",
+          "temperature_lag_24h",
+          "power_mean_6h",
+          "power_std_6h",
+          "power_mean_24h",
+          "power_std_24h",
+          "wind_speed_mean_6h",
+          "wind_speed_std_6h",
+          "wind_speed_mean_24h",
+          "wind_speed_std_24h",
+          "temperature_mean_6h",
+          "temperature_std_6h",
+          "temperature_mean_24h",
+          "temperature_std_24h",
+          "complete_hours_6h",
+          "complete_hours_24h",
+          "horizon_hours",
+          "hour_sin",
+          "hour_cos",
+          "day_of_year_sin",
+          "day_of_year_cos"
+        ],
+        "horizons": [
+          1,
+          48
+        ],
+        "horizon_max": 48,
+        "usable_from": "2026-01-01T00:00:00+00:00",
+        "trained_at": "2026-09-23T11:50:39.345667+00:00",
+        "training_end": "2025-10-01T00:00:00+00:00",
+        "validation_end": "2026-01-01T00:00:00+00:00",
+        "control_end": "2026-02-01T00:00:00+00:00",
+        "test_end": "2026-02-01T00:00:00+00:00",
+        "model_sha256": "66cfbd196bfaca2cf64c8d877df292c0a2c47fa3150ed02defa499f2a2bf9425",
+        "report_sha256": "e534eb5ede5cfbec30ca222e162f2a0409c4e74b6826ded393e989932dbb11c7",
+        "fit_rows_sha256": "6e967229629ac67fb76ea0ce7d097af2cd6493d14b16ff4ce9105ad8116eedb1",
+        "sklearn_version": "1.9.1",
+        "validation_mae": 0.3048691295401044,
+        "persistence_validation_mae": 0.34925434420376095,
+        "weather_used": false,
+        "independent_untouched_test_available": false
+      },
+      "report": {
+        "model_type": "telemetry_hist_gradient_boosting",
+        "parameters": {
+          "loss": "absolute_error",
+          "learning_rate": 0.06,
+          "max_iter": 120,
+          "max_leaf_nodes": 15,
+          "min_samples_leaf": 40,
+          "l2_regularization": 1.0,
+          "early_stopping": false,
+          "random_state": 42
+        },
+        "split_boundaries": {
+          "train_end": "2025-10-01T00:00:00+00:00",
+          "validation_end": "2026-01-01T00:00:00+00:00",
+          "control_end": "2026-02-01T00:00:00+00:00"
+        },
+        "splits": {
+          "train": {
+            "rows": 165260,
+            "unique_target_hours": 20775,
+            "unique_issue_times": 3483,
+            "issue_min": "2023-03-11T00:00:00+00:00",
+            "issue_max": "2025-09-30T18:00:00+00:00",
+            "target_min": "2023-03-11T01:00:00+00:00",
+            "target_max": "2025-09-30T23:00:00+00:00",
+            "target_available_at_max": "2025-10-01T00:00:00+00:00",
+            "feature_available_at_max": "2025-09-30T18:00:00+00:00",
+            "unique_target_sha256": "a07f2ec839fcb3fb247ec6c5431d3f5102d52ffa0af5d1da533784e4dd5535cb"
+          },
+          "validation": {
+            "rows": 16804,
+            "unique_target_hours": 2142,
+            "unique_issue_times": 359,
+            "issue_min": "2025-10-01T00:00:00+00:00",
+            "issue_max": "2025-12-31T18:00:00+00:00",
+            "target_min": "2025-10-01T01:00:00+00:00",
+            "target_max": "2025-12-31T23:00:00+00:00",
+            "target_available_at_max": "2026-01-01T00:00:00+00:00",
+            "feature_available_at_max": "2025-12-31T18:00:00+00:00",
+            "unique_target_sha256": "e3f5bb7a7876687257cc88431ae3fbaca28c69987fcf683966897149e5bc380b"
+          },
+          "control": {
+            "rows": 5720,
+            "unique_target_hours": 736,
+            "unique_issue_times": 123,
+            "issue_min": "2026-01-01T00:00:00+00:00",
+            "issue_max": "2026-01-31T12:00:00+00:00",
+            "target_min": "2026-01-01T01:00:00+00:00",
+            "target_max": "2026-01-31T16:00:00+00:00",
+            "target_available_at_max": "2026-01-31T17:00:00+00:00",
+            "feature_available_at_max": "2026-01-31T12:00:00+00:00",
+            "unique_target_sha256": "8cd188c413c3e9eb4e68ba6253a8350aeb1b16425de3da70ae646906c529d433"
+          }
+        },
+        "target_overlap_counts": {
+          "train_validation": 0,
+          "train_control": 0,
+          "validation_control": 0
+        },
+        "feature_availability_violations": 0,
+        "fit_labels_available_at_max": "2025-10-01T00:00:00+00:00",
+        "fit_labels_available_by_train_end": true,
+        "validation": {
+          "all": {
+            "rows": 16804,
+            "model": {
+              "mae": 0.3048691295401044,
+              "rmse": 0.3574681164331407
+            },
+            "persistence": {
+              "mae": 0.34925434420376095,
+              "rmse": 0.4709961279547158
+            }
+          },
+          "1_24h": {
+            "rows": 8496,
+            "model": {
+              "mae": 0.2927288099586075,
+              "rmse": 0.3489184582734307
+            },
+            "persistence": {
+              "mae": 0.31236346516007535,
+              "rmse": 0.4347539856809767
+            }
+          },
+          "25_48h": {
+            "rows": 8308,
+            "model": {
+              "mae": 0.31728416988247304,
+              "rmse": 0.36600475613259975
+            },
+            "persistence": {
+              "mae": 0.38698001925854597,
+              "rmse": 0.5053775787314571
+            }
+          }
+        },
+        "control": {
+          "all": {
+            "rows": 5720,
+            "model": {
+              "mae": 0.2846889249708891,
+              "rmse": 0.34567620451407954
+            },
+            "persistence": {
+              "mae": 0.33661975524475524,
+              "rmse": 0.45700350892288794
+            }
+          },
+          "1_24h": {
+            "rows": 2908,
+            "model": {
+              "mae": 0.26670862046333055,
+              "rmse": 0.33115013300091595
+            },
+            "persistence": {
+              "mae": 0.31314419990829895,
+              "rmse": 0.4416380351122078
+            }
+          },
+          "25_48h": {
+            "rows": 2812,
+            "model": {
+              "mae": 0.3032830663321907,
+              "rmse": 0.36008236841954133
+            },
+            "persistence": {
+              "mae": 0.3608967520151731,
+              "rmse": 0.47236813923209636
+            }
+          }
+        },
+        "test": {
+          "all": {
+            "rows": 5720,
+            "model": {
+              "mae": 0.2846889249708891,
+              "rmse": 0.34567620451407954
+            },
+            "persistence": {
+              "mae": 0.33661975524475524,
+              "rmse": 0.45700350892288794
+            }
+          },
+          "1_24h": {
+            "rows": 2908,
+            "model": {
+              "mae": 0.26670862046333055,
+              "rmse": 0.33115013300091595
+            },
+            "persistence": {
+              "mae": 0.31314419990829895,
+              "rmse": 0.4416380351122078
+            }
+          },
+          "25_48h": {
+            "rows": 2812,
+            "model": {
+              "mae": 0.3032830663321907,
+              "rmse": 0.36008236841954133
+            },
+            "persistence": {
+              "mae": 0.3608967520151731,
+              "rmse": 0.47236813923209636
+            }
+          }
+        },
+        "promotion": {
+          "promoted": true,
+          "criterion": "validation MAE strictly below persistence MAE",
+          "frozen_before_control_metrics": true,
+          "refit_after_selection": false
+        },
+        "exclusions": {
+          "requested_rows": 203136,
+          "reasons": {
+            "stale_measurements": 12720,
+            "missing_target": 2232,
+            "missing_history": 48
+          },
+          "crossing_split_boundary_or_outside_window": 352,
+          "incomplete_hours": 1715,
+          "dropped_ambiguous_or_nonexistent_labels": 0
+        },
+        "data_assessment": {
+          "weather_used": false,
+          "telemetry_only": true,
+          "timezone_is_user_assumption": true,
+          "timestamps_assumed_instantly_available": true,
+          "source_period_start": "2023-03-10T17:00:00+00:00",
+          "source_period_end": "2026-01-31T17:00:00+00:00",
+          "complete_hours": 23678,
+          "complete_hour_fraction": 0.9324617020438704,
+          "unique_turbines": 1,
+          "forecast_horizons": [
+            1,
+            48
+          ],
+          "issue_stride_hours": 6,
+          "independent_untouched_test_available": false,
+          "control_warning": "January 2026 was inspected during timezone analysis. This is a retrospective control, not an untouched final test. February-or-later labels are needed for an independent final test. Temporal row leakage is checked separately."
+        },
+        "fit_rows_sha256": "6e967229629ac67fb76ea0ce7d097af2cd6493d14b16ff4ce9105ad8116eedb1"
+      }
+    },
+    {
+      "turbine_id": 3,
+      "name": "Второй",
+      "manifest": {
+        "format_version": 1,
+        "artifact_version": 1,
+        "model_type": "telemetry_hist_gradient_boosting",
+        "promoted": true,
+        "turbine_id": 3,
+        "source_sha256": "c4c341582fb2dd348b7187f0128cff265fe055f469413871ebb5db50eef58b5b",
+        "timezone": "Etc/GMT-6",
+        "timestamp_semantics": "interval_start",
+        "feature_columns": [
+          "last_power",
+          "last_wind_speed",
+          "last_temperature",
+          "lag_age_hours",
+          "power_lag_1h",
+          "power_lag_6h",
+          "power_lag_24h",
+          "wind_speed_lag_1h",
+          "wind_speed_lag_6h",
+          "wind_speed_lag_24h",
+          "temperature_lag_1h",
+          "temperature_lag_6h",
+          "temperature_lag_24h",
+          "power_mean_6h",
+          "power_std_6h",
+          "power_mean_24h",
+          "power_std_24h",
+          "wind_speed_mean_6h",
+          "wind_speed_std_6h",
+          "wind_speed_mean_24h",
+          "wind_speed_std_24h",
+          "temperature_mean_6h",
+          "temperature_std_6h",
+          "temperature_mean_24h",
+          "temperature_std_24h",
+          "complete_hours_6h",
+          "complete_hours_24h",
+          "horizon_hours",
+          "hour_sin",
+          "hour_cos",
+          "day_of_year_sin",
+          "day_of_year_cos"
+        ],
+        "horizons": [
+          1,
+          48
+        ],
+        "horizon_max": 48,
+        "usable_from": "2026-01-01T00:00:00+00:00",
+        "trained_at": "2026-09-23T11:50:28.358526+00:00",
+        "training_end": "2025-10-01T00:00:00+00:00",
+        "validation_end": "2026-01-01T00:00:00+00:00",
+        "control_end": "2026-02-01T00:00:00+00:00",
+        "test_end": "2026-02-01T00:00:00+00:00",
+        "model_sha256": "1b59e64f1e2b6f767c9e66c55d02683c56d806d00c2bcdf62af83342fc573a39",
+        "report_sha256": "db9289b40621b41fa5399bd195c15f9cfca980f0e30f9c0d46e4be9fde715e38",
+        "fit_rows_sha256": "cff4d2a1c5550adb89b9afec325a1c5f3199da13c14ac4a7767656f97ed794a3",
+        "sklearn_version": "1.9.1",
+        "validation_mae": 0.304658684979095,
+        "persistence_validation_mae": 0.3501958333333333,
+        "weather_used": false,
+        "independent_untouched_test_available": false
+      },
+      "report": {
+        "model_type": "telemetry_hist_gradient_boosting",
+        "parameters": {
+          "loss": "absolute_error",
+          "learning_rate": 0.06,
+          "max_iter": 120,
+          "max_leaf_nodes": 15,
+          "min_samples_leaf": 40,
+          "l2_regularization": 1.0,
+          "early_stopping": false,
+          "random_state": 42
+        },
+        "split_boundaries": {
+          "train_end": "2025-10-01T00:00:00+00:00",
+          "validation_end": "2026-01-01T00:00:00+00:00",
+          "control_end": "2026-02-01T00:00:00+00:00"
+        },
+        "splits": {
+          "train": {
+            "rows": 164985,
+            "unique_target_hours": 20764,
+            "unique_issue_times": 3479,
+            "issue_min": "2023-03-11T00:00:00+00:00",
+            "issue_max": "2025-09-30T18:00:00+00:00",
+            "target_min": "2023-03-11T01:00:00+00:00",
+            "target_max": "2025-09-30T23:00:00+00:00",
+            "target_available_at_max": "2025-10-01T00:00:00+00:00",
+            "feature_available_at_max": "2025-09-30T18:00:00+00:00",
+            "unique_target_sha256": "1989a67306f9bf9c3d4230f89f923e2bf18b451e8acc585a83d632505304028d"
+          },
+          "validation": {
+            "rows": 16800,
+            "unique_target_hours": 2141,
+            "unique_issue_times": 359,
+            "issue_min": "2025-10-01T00:00:00+00:00",
+            "issue_max": "2025-12-31T18:00:00+00:00",
+            "target_min": "2025-10-01T01:00:00+00:00",
+            "target_max": "2025-12-31T23:00:00+00:00",
+            "target_available_at_max": "2026-01-01T00:00:00+00:00",
+            "feature_available_at_max": "2025-12-31T18:00:00+00:00",
+            "unique_target_sha256": "f3c12bce6dea0b469b484a687057ce38d81aced37d6c173b2006d1cc0c9914ae"
+          },
+          "control": {
+            "rows": 5728,
+            "unique_target_hours": 737,
+            "unique_issue_times": 123,
+            "issue_min": "2026-01-01T00:00:00+00:00",
+            "issue_max": "2026-01-31T12:00:00+00:00",
+            "target_min": "2026-01-01T01:00:00+00:00",
+            "target_max": "2026-01-31T17:00:00+00:00",
+            "target_available_at_max": "2026-01-31T18:00:00+00:00",
+            "feature_available_at_max": "2026-01-31T12:00:00+00:00",
+            "unique_target_sha256": "3a1d0e58f3da93068bb57b9367955d7910ea412fa1891e6bbaf74d4af130f8be"
+          }
+        },
+        "target_overlap_counts": {
+          "train_validation": 0,
+          "train_control": 0,
+          "validation_control": 0
+        },
+        "feature_availability_violations": 0,
+        "fit_labels_available_at_max": "2025-10-01T00:00:00+00:00",
+        "fit_labels_available_by_train_end": true,
+        "validation": {
+          "all": {
+            "rows": 16800,
+            "model": {
+              "mae": 0.304658684979095,
+              "rmse": 0.35656229965540986
+            },
+            "persistence": {
+              "mae": 0.3501958333333333,
+              "rmse": 0.47256021564178186
+            }
+          },
+          "1_24h": {
+            "rows": 8492,
+            "model": {
+              "mae": 0.2911342196485476,
+              "rmse": 0.3459400618169861
+            },
+            "persistence": {
+              "mae": 0.31245544826503374,
+              "rmse": 0.43598931173497796
+            }
+          },
+          "25_48h": {
+            "rows": 8308,
+            "model": {
+              "mae": 0.3184826810776757,
+              "rmse": 0.36710228454902016
+            },
+            "persistence": {
+              "mae": 0.38877206708393514,
+              "rmse": 0.507223335975561
+            }
+          }
+        },
+        "control": {
+          "all": {
+            "rows": 5728,
+            "model": {
+              "mae": 0.28509656707310194,
+              "rmse": 0.3473876263911606
+            },
+            "persistence": {
+              "mae": 0.3374912709497207,
+              "rmse": 0.45824868017966613
+            }
+          },
+          "1_24h": {
+            "rows": 2912,
+            "model": {
+              "mae": 0.26841597589871635,
+              "rmse": 0.3336072602891447
+            },
+            "persistence": {
+              "mae": 0.3141626602564102,
+              "rmse": 0.4425872647426642
+            }
+          },
+          "25_48h": {
+            "rows": 2816,
+            "model": {
+              "mae": 0.302345814764796,
+              "rmse": 0.36108509128215455
+            },
+            "persistence": {
+              "mae": 0.3616151751893939,
+              "rmse": 0.47389997455397703
+            }
+          }
+        },
+        "test": {
+          "all": {
+            "rows": 5728,
+            "model": {
+              "mae": 0.28509656707310194,
+              "rmse": 0.3473876263911606
+            },
+            "persistence": {
+              "mae": 0.3374912709497207,
+              "rmse": 0.45824868017966613
+            }
+          },
+          "1_24h": {
+            "rows": 2912,
+            "model": {
+              "mae": 0.26841597589871635,
+              "rmse": 0.3336072602891447
+            },
+            "persistence": {
+              "mae": 0.3141626602564102,
+              "rmse": 0.4425872647426642
+            }
+          },
+          "25_48h": {
+            "rows": 2816,
+            "model": {
+              "mae": 0.302345814764796,
+              "rmse": 0.36108509128215455
+            },
+            "persistence": {
+              "mae": 0.3616151751893939,
+              "rmse": 0.47389997455397703
+            }
+          }
+        },
+        "promotion": {
+          "promoted": true,
+          "criterion": "validation MAE strictly below persistence MAE",
+          "frozen_before_control_metrics": true,
+          "refit_after_selection": false
+        },
+        "exclusions": {
+          "requested_rows": 203088,
+          "reasons": {
+            "stale_measurements": 12864,
+            "missing_target": 2359
+          },
+          "crossing_split_boundary_or_outside_window": 352,
+          "incomplete_hours": 1725,
+          "dropped_ambiguous_or_nonexistent_labels": 0
+        },
+        "data_assessment": {
+          "weather_used": false,
+          "telemetry_only": true,
+          "timezone_is_user_assumption": true,
+          "timestamps_assumed_instantly_available": true,
+          "source_period_start": "2023-03-10T18:00:00+00:00",
+          "source_period_end": "2026-01-31T17:00:00+00:00",
+          "complete_hours": 23667,
+          "complete_hour_fraction": 0.9320652173913043,
+          "unique_turbines": 1,
+          "forecast_horizons": [
+            1,
+            48
+          ],
+          "issue_stride_hours": 6,
+          "independent_untouched_test_available": false,
+          "control_warning": "January 2026 was inspected during timezone analysis. This is a retrospective control, not an untouched final test. February-or-later labels are needed for an independent final test. Temporal row leakage is checked separately."
+        },
+        "fit_rows_sha256": "cff4d2a1c5550adb89b9afec325a1c5f3199da13c14ac4a7767656f97ed794a3"
+      }
+    }
+  ]
+}

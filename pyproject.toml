@@ -11,6 +11,9 @@ dependencies = [
   "httpx>=0.28,<1",
   "pandas>=2.2,<3",
   "pyarrow>=19,<24",
+  "scikit-learn>=1.5,<2",
+  "joblib>=1.3,<2",
+  "numpy>=1.26,<3",
 ]
 
 [dependency-groups]
@@ -21,7 +24,7 @@ requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/wind"]
+packages = ["src/wind", "src/wind_ml"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

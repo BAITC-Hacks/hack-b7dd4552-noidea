@@ -2,7 +2,12 @@ import json
 import os
 import sqlite3
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
+
+
+class TurbineNotFoundError(ValueError):
+    """The requested turbine is missing or no longer active."""
 
 
 def data_dir() -> Path:
@@ -36,12 +41,21 @@ def save_metadata(table: str, key: int | str, metadata: dict):
         )
 
 
-def all_metadata(table: str) -> list[dict]:
+def all_metadata(table: str, *, include_deleted: bool = False) -> list[dict]:
     assert table in {"datasets", "weather", "turbines", "sources"}
     with connect() as db:
-        return [
+        items = [
             json.loads(row[0]) for row in db.execute(f"SELECT metadata FROM {table} ORDER BY id")
         ]
+    if table == "turbines" and not include_deleted:
+        return [item for item in items if not item.get("deleted_at")]
+    return items
+
+
+def deleted_turbines() -> list[dict]:
+    return [
+        item for item in all_metadata("turbines", include_deleted=True) if item.get("deleted_at")
+    ]
 
 
 def create_turbine(values: dict) -> dict:
@@ -52,8 +66,37 @@ def create_turbine(values: dict) -> dict:
     return result
 
 
+def _read_turbine(db, turbine_id: int) -> dict:
+    row = db.execute("SELECT metadata FROM turbines WHERE id=?", (turbine_id,)).fetchone()
+    if row is None:
+        raise TurbineNotFoundError("Турбина не найдена")
+    return json.loads(row[0])
+
+
 def get_turbine(turbine_id: int) -> dict:
-    result = next((t for t in all_metadata("turbines") if t["id"] == turbine_id), None)
-    if result is None:
-        raise ValueError("Сначала добавьте турбину")
+    with connect() as db:
+        result = _read_turbine(db, turbine_id)
+    if result.get("deleted_at"):
+        raise TurbineNotFoundError("Турбина удалена. Восстановите её из корзины")
+    return result
+
+
+def delete_turbine(turbine_id: int) -> dict:
+    """Archive only the turbine registration, retaining every dataset and artifact."""
+    return _set_turbine_deleted(turbine_id, True)
+
+
+def restore_turbine(turbine_id: int) -> dict:
+    return _set_turbine_deleted(turbine_id, False)
+
+
+def _set_turbine_deleted(turbine_id: int, deleted: bool) -> dict:
+    with connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        result = _read_turbine(db, turbine_id)
+        if deleted:
+            result.setdefault("deleted_at", datetime.now(UTC).isoformat())
+        else:
+            result.pop("deleted_at", None)
+        db.execute("UPDATE turbines SET metadata=? WHERE id=?", (json.dumps(result), turbine_id))
     return result
