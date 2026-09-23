@@ -4,6 +4,7 @@ import './style.css';
 import {SourcesPanel} from './SourcesPanel';
 import {ForecastPage} from './ForecastPage';
 import {DeletedTurbines, TurbineDelete} from './TurbineActions';
+import {TurbineSpecifications} from './TurbineSpecifications';
 
 type Point = {time: string; [key: string]: string | number | null};
 type Dataset = {
@@ -263,6 +264,7 @@ function App() {
       <div className="turbines">{datasets.map(t => <button key={t.id} className={t.id===id?'active':''} disabled={turbineActionBusy || importBusy} onClick={() => setId(t.id)}>{t.name}<span>{t.has_data ? 'Измерения загружены' : 'Нет измерений'}</span></button>)}<a className="add-turbine-link" href="/turbines/new">+ Добавить турбину</a></div>
       {d && <TurbineDelete key={d.id} turbine={d} disabled={turbineActionBusy || importBusy} onBusyChange={setTurbineActionBusy} onDeleted={onDeleted}/>}
       <DeletedTurbines version={trashVersion} disabled={turbineActionBusy || importBusy} onBusyChange={setTurbineActionBusy} onRestored={async restoredId => { await refresh(restoredId); }}/>
+      {d && <TurbineSpecifications key={`specifications-${d.id}`} turbine={d} disabled={turbineActionBusy || importBusy} onBusyChange={setTurbineActionBusy} onApplied={() => refresh(d.id)}/>}
       {!datasets.length && <div className="panel"><h2>Начните со своей турбины</h2><p className="muted">1. Укажите название и координаты. 2. Импортируйте CSV с измерениями. 3. Проверьте данные и загрузите архив погоды.</p><div className="notice compact">После импорта откройте «Прогноз»: там показано, есть ли проверенная ML-модель для этой турбины. Если её нет, доступен резервный прогноз по последней мощности.</div></div>}
       {d && <ImportPanel key={`import-${d.id}`} turbine={d} onImported={() => refresh(d.id)} disabled={turbineActionBusy} onBusyChange={setImportBusy}/>}
       {d?.has_data && <div className="turbine-actions"><a href="/forecast">Получить прогноз →</a><a href="/sources">Подключить источник погоды →</a></div>}
@@ -292,7 +294,7 @@ function App() {
         <details><summary>Исходный файл и контрольная сумма</summary><p>{d.source_name}</p><code>SHA-256: {d.sha256}</code></details>
       </section>}
       </>}
-      <footer>NoIdea / HackAlem AI <span>Ваши файлы сохраняются на сервере приложения. LLM запускается только по кнопке.</span></footer>
+      <footer>NoIdea / HackAlem AI <span>Ваши файлы сохраняются на сервере приложения. LLM запускается вручную или при явно включённой автоматизации.</span></footer>
     </main>
   </div>;
 }
