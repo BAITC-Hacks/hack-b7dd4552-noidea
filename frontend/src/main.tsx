@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './style.css';
+import {SourcesPanel} from './SourcesPanel';
 
 type Point = {time: string; [key: string]: string | number | null};
 type Dataset = {
@@ -181,6 +182,21 @@ function AgentPanel({turbine}: {turbine: Dataset}) {
 }
 
 function App() {
+  const [activeSection, setActiveSection] = useState('measurements');
+  useEffect(() => {
+    const update = () => {
+      let active = 'measurements';
+      for (const section of ['measurements', 'weather', 'agent', 'sources']) {
+        const element = document.getElementById(section);
+        if (element && element.getBoundingClientRect().top <= window.innerHeight * 0.35) active = section;
+      }
+      setActiveSection(active);
+    };
+    window.addEventListener('scroll', update, {passive: true});
+    window.addEventListener('resize', update);
+    update();
+    return () => { window.removeEventListener('scroll', update); window.removeEventListener('resize', update); };
+  }, []);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [id, setId] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
@@ -221,13 +237,18 @@ function App() {
   const d = datasets.find(d => d.id === id);
   const metrics: Record<string, [string, string]> = {power: ['Мощность', 'доля номинала'], wind_speed: ['Ветер', 'м/с'], temperature: ['Температура', '°C']};
   return <div className="app">
-    <aside><div className="brand"><span className="brand-icon">⌁</span><div>NoIdea<span>WIND INTELLIGENCE</span></div></div><div className="nav-label">Рабочее пространство</div><a className="nav-item selected" href="#measurements">▦ <span>Данные ВЭС</span><small>01</small></a><a className="nav-item" href="#weather">↗ <span>Архив погоды</span></a><div className="aside-bottom"><span className="dot"/> HackAlem AI<div>Этап 1 · Исследование данных</div></div></aside>
+    <aside><div className="brand"><span className="brand-icon">⌁</span><div>NoIdea<span>WIND INTELLIGENCE</span></div></div><div className="nav-label">Рабочее пространство</div><nav aria-label="Разделы страницы">{[
+      ['measurements', '▦', 'Данные ВЭС'], ['weather', '↗', 'Архив погоды'], ['agent', '◎', 'Агент и прогноз'], ['sources', '⚙', 'Источники'],
+    ].map(([section, icon, label]) => {
+      const enabled = section === 'measurements' || section === 'sources' || !!d;
+      return <a key={section} className={`nav-item${activeSection === section ? ' selected' : ''}`} href={enabled ? `#${section}` : undefined} aria-current={activeSection === section ? 'location' : undefined} aria-disabled={!enabled} title={enabled ? undefined : 'Сначала добавьте турбину'}>{icon} <span>{label}</span></a>;
+    })}</nav><div className="aside-bottom"><span className="dot"/> HackAlem AI<div>Этап 1 · Исследование данных</div></div></aside>
     <main><header><span>Проект / <strong>Данные ВЭС</strong></span><a href="/docs" target="_blank" rel="noreferrer">API ↗</a></header>
-      <div className="page-title"><div><div className="eyebrow">От измерений к прогнозу</div><h1>Данные ветропарка</h1><p>Добавьте турбину и загрузите измерения, чтобы начать работу с данными.</p></div><span className="stage">Этап 01 / Данные</span></div>
+      <div className="page-title" id="measurements"><div><div className="eyebrow">От измерений к прогнозу</div><h1>Данные ветропарка</h1><p>Добавьте турбину и загрузите измерения, чтобы начать работу с данными.</p></div><span className="stage">Этап 01 / Данные</span></div>
       <div className="turbines">{datasets.map(t => <button key={t.id} className={t.id===id?'active':''} onClick={() => setId(t.id)}>{t.name}<span>{t.has_data ? 'Измерения загружены' : 'Нет измерений'}</span></button>)}<button onClick={() => setAdding(!adding)}>+ Добавить турбину</button></div>
       {(adding || !datasets.length) && <TurbineForm onCreated={async t => { setAdding(false); await refresh(t.id); }}/>}
       {!datasets.length && <div className="panel"><h2>Начните со своей турбины</h2><p className="muted">1. Укажите название и координаты. 2. Импортируйте CSV с измерениями. 3. Проверьте данные и загрузите архив погоды.</p><div className="notice compact">После импорта доступен агент с резервным baseline-прогнозом. Обученная погодная модель ещё не интегрирована.</div></div>}
-      {d && <ImportPanel key={d.id} turbine={d} onImported={() => refresh(d.id)}/>}
+      {d && <ImportPanel key={`import-${d.id}`} turbine={d} onImported={() => refresh(d.id)}/>}
       {catalogError && <div className="error" role="alert">{catalogError}</div>}
       {d?.has_data && <><div className="stats">
         <div><span>Исходных измерений</span><strong>{n(d.rows)}</strong><small>Шаг 10 минут</small></div>
@@ -235,7 +256,7 @@ function App() {
         <div><span>Пропущено отметок</span><strong>{n(d.missing_slots)}</strong><small>{n(d.gap_count)} разрывов ряда</small></div>
         <div><span>Полных часов</span><strong>{n(d.complete_hours)}</strong><small>из {n(d.hours)} · по 6 измерений</small></div>
       </div>{d.dataset_kind==='demo' && <div className="notice">Демонстрационная выборка: последние 7 дней исходных CSV. Для полной истории импортируйте файлы по инструкции в README.</div>}</>}
-      {d?.has_data && <><section className="panel" id="measurements"><div className="section-heading"><div><div className="eyebrow">Наблюдения</div><h2>История измерений</h2></div><span className="tag">Почасовые данные</span></div>
+      {d?.has_data && <><section className="panel"><div className="section-heading"><div><div className="eyebrow">Наблюдения</div><h2>История измерений</h2></div><span className="tag">Почасовые данные</span></div>
         <form className="filters" onSubmit={e=>{e.preventDefault(); void loadSeries(d.id,start,end);}}>
           <label>Начало периода<input type="date" required value={start} onChange={e=>setStart(e.target.value)}/></label><label>Конец периода<input type="date" required value={end} onChange={e=>setEnd(e.target.value)}/></label>
           <button disabled={loading}>Показать</button><a className="export" href={`/api/turbines/${id}/export?start=${start}&end=${end}`}>Скачать CSV ↓</a>
@@ -248,13 +269,14 @@ function App() {
       <div className="notice"><strong>Время источника не подтверждено.</strong> Предполагается Asia/Almaty: UTC+6 до марта 2024, затем UTC+5. Измерения пока не совмещены с погодой UTC. Мощность нормализована, это не кВт·ч.</div>
       </>}
       {d && <div id="weather"><WeatherPanel key={d.id} turbineId={d.id}/></div>}
-      {d && <AgentPanel key={d.id} turbine={d}/>}
+      {d && <div id="agent"><AgentPanel key={`agent-${d.id}`} turbine={d}/></div>}
       {d?.has_data && <section className="panel"><div className="section-heading"><div><div className="eyebrow">Контроль качества</div><h2>Полнота и происхождение</h2></div><span className="tag">Без заполнения пропусков</span></div>
         <div className="quality-bar"><span style={{width:`${100*d.complete_hours/d.hours}%`}}/><span style={{width:`${100*d.partial_hours/d.hours}%`}}/><span style={{width:`${100*d.missing_hours/d.hours}%`}}/></div>
         <div className="quality-legend"><span>● Полные: {n(d.complete_hours)}</span><span>● Неполные: {n(d.partial_hours)}</span><span>● Нет валидных значений: {n(d.missing_hours)}</span></div>
         {d.largest_gaps.length>0 ? <div className="table-wrap"><table><caption>Крупнейшие разрывы исходного ряда</caption><thead><tr><th>Первая отсутствующая отметка</th><th>Последняя отсутствующая отметка</th><th>Пропущено × 10 мин</th></tr></thead><tbody>{d.largest_gaps.map(g=><tr key={g.start}><td>{dt(g.start)}</td><td>{dt(g.end)}</td><td>{n(g.missing_slots)}</td></tr>)}</tbody></table></div> : <p className="muted">Пропусков временных отметок в импортированном периоде нет.</p>}
         <details><summary>Исходный файл и контрольная сумма</summary><p>{d.source_name}</p><code>SHA-256: {d.sha256}</code></details>
       </section>}
+      <SourcesPanel turbine={d}/>
       <footer>NoIdea / HackAlem AI <span>Ваши файлы сохраняются на сервере приложения. LLM запускается только по кнопке.</span></footer>
     </main>
   </div>;

@@ -16,7 +16,9 @@ from pydantic import BaseModel, Field, field_validator
 
 from wind.agent import PROJECT as AGENT_PROJECT
 from wind.agent import AgentRequest, run_agent
+from wind.discovery import router as discovery_router
 from wind.ingest import import_csv
+from wind.sources import router as sources_router
 from wind.storage import all_metadata, create_turbine, data_dir, get_turbine
 from wind.weather import WeatherRequest, fetch_weather, weather_detail
 
@@ -24,6 +26,10 @@ PROJECT = Path(__file__).resolve().parents[2]
 
 
 app = FastAPI(title="ВЭС · Data Explorer", version="0.2.0")
+
+
+app.include_router(sources_router)
+app.include_router(discovery_router)
 
 
 class TurbineInput(BaseModel):
