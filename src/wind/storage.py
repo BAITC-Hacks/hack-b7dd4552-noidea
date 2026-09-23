@@ -19,6 +19,7 @@ def connect():
     db.execute(
         "CREATE TABLE IF NOT EXISTS turbines (id INTEGER PRIMARY KEY AUTOINCREMENT, metadata TEXT)"
     )
+    db.execute("CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, metadata TEXT)")
     try:
         with db:
             yield db
@@ -27,7 +28,7 @@ def connect():
 
 
 def save_metadata(table: str, key: int | str, metadata: dict):
-    assert table in {"datasets", "weather", "turbines"}
+    assert table in {"datasets", "weather", "turbines", "sources"}
     with connect() as db:
         db.execute(
             f"INSERT OR REPLACE INTO {table} VALUES (?, ?)",
@@ -36,7 +37,7 @@ def save_metadata(table: str, key: int | str, metadata: dict):
 
 
 def all_metadata(table: str) -> list[dict]:
-    assert table in {"datasets", "weather", "turbines"}
+    assert table in {"datasets", "weather", "turbines", "sources"}
     with connect() as db:
         return [
             json.loads(row[0]) for row in db.execute(f"SELECT metadata FROM {table} ORDER BY id")
