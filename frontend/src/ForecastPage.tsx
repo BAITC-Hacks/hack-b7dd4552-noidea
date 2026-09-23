@@ -1,4 +1,5 @@
 import {useEffect, useRef, useState} from 'react';
+import {AutomationPanel, ReplayPanel} from './ReplayPanel';
 
 type Turbine = {id: number; name: string; has_data: boolean; start?: string; end?: string};
 type TimeSettings = {timezone: string; semantics: string};
@@ -21,6 +22,9 @@ type MLModel = {
   usable_from: string; training_end: string; promoted: boolean; source_matches: boolean;
   validation_mae?: number | null; persistence_validation_mae?: number | null;
   validation_start?: string; validation_end?: string; control_start?: string; control_end?: string;
+  weather_used?: boolean;
+  evaluation_training_end?: string;
+  mean_validation_mae?: number | null; frozen_persistence_validation_mae?: number | null;
 };
 
 const HOUR = 3600000;
@@ -65,9 +69,11 @@ function checkText(check: ToolCheck): string {
     no_complete_history: 'До выбранного момента расчёта нет полного часа измерений.',
     stale_telemetry: `Измерения устарели${typeof result.age_hours === 'number' ? ` на ${result.age_hours} ч` : ''}. Допустимый возраст — 2 часа. Выберите период рядом с импортированными данными.`,
     validation_failed: 'Не удалось подготовить измерения. Проверьте выбранные настройки времени.',
+    weather_model_unavailable: 'Для выбранной турбины и настроек времени нет готовой погодной модели.',
   };
   if (result.ok && result.time_configured === false) return messages.time_unconfirmed;
   if (result.ok) {
+    if (check.tool === 'prepare_features' && result.forecast_route === 'weather') return 'Погодная модель готова. Историческая доступность и полнота нужного выпуска погоды будут проверены при расчёте; новая телеметрия не требуется.';
     if (check.tool === 'prepare_features' && typeof result.available_at === 'string') return `Полное измерение доступно с ${shownTime(result.available_at)} UTC; возраст — ${result.age_hours} ч.`;
     return 'Проверка пройдена.';
   }
@@ -103,14 +109,16 @@ function ModelInfo({turbineId, settings, issue, models, loading, error}: {
   if (error) return <p className="small muted">Не удалось проверить список ML-моделей. При запуске сервер проверит доступность модели заново.</p>;
   if (!settings.timezone || !settings.semantics) return <p className="small muted">Укажите часовой пояс и смысл отметки CSV, чтобы проверить подходящую модель. До этого запуск заблокирован.</p>;
 
-  const candidates = models.filter(model => model.turbine_id === turbineId && model.model_type === 'telemetry_hist_gradient_boosting');
+  const usesWeather = (model: MLModel) => model.model_type === 'nwp_hist_gradient_boosting' || model.weather_used === true;
+  const candidates = models.filter(model => model.turbine_id === turbineId && (model.model_type === 'telemetry_hist_gradient_boosting' || usesWeather(model)));
   const matching = candidates.filter(model => model.timezone === settings.timezone && model.timestamp_semantics === settings.semantics);
   const current = matching.filter(model => model.source_matches);
   const promoted = current.filter(model => model.promoted);
   const available = promoted.filter(model => issue !== null && Number.isFinite(Date.parse(model.usable_from)) && issue >= Date.parse(model.usable_from));
-  const byNewest = (items: MLModel[]) => [...items].sort((a, b) => Date.parse(b.usable_from) - Date.parse(a.usable_from))[0];
+  const byNewest = (items: MLModel[]) => [...items].sort((a, b) => Number(usesWeather(b)) - Number(usesWeather(a)) || Date.parse(b.usable_from) - Date.parse(a.usable_from))[0];
   const model = byNewest(available) || byNewest(promoted) || byNewest(current) || byNewest(matching);
   const mlAvailable = available.length > 0;
+  const comparisonMAE = model?.persistence_validation_mae ?? model?.frozen_persistence_validation_mae;
   let reason = '';
   let title = 'Резервный baseline';
   if (!candidates.length) reason = 'Для этой турбины ещё нет обученной ML-модели.';
@@ -118,16 +126,22 @@ function ModelInfo({turbineId, settings, issue, models, loading, error}: {
   else if (!current.length) reason = 'После обучения измерения изменились. Для нового CSV модель нужно переобучить.';
   else if (!promoted.length) reason = 'Модель не прошла отбор по результатам валидации.';
   else if (issue === null) {title = 'ML готова к проверке даты'; reason = 'Выберите начало прогноза, чтобы проверить доступность модели на момент расчёта.';}
-  else if (mlAvailable) {title = 'ML доступна'; reason = 'Бустинг использует прошлые измерения и календарные признаки. Агент проверит данные перед расчётом.';}
+  else if (mlAvailable) {
+    title = model && usesWeather(model) ? 'Погодная ML-модель готова' : 'ML по телеметрии доступна';
+    reason = model && usesWeather(model)
+      ? 'Новая телеметрия не требуется. Перед прогнозом агент проверит наличие и историческую доступность погодного выпуска.'
+      : 'Бустинг использует прошлые измерения и календарные признаки. Агент проверит свежесть данных перед расчётом.';
+  }
   else if (model && Number.isFinite(Date.parse(model.usable_from))) reason = `На выбранный момент расчёта ML ещё не была доступна. Её можно использовать с ${shownTime(model.usable_from)} UTC.`;
   else reason = 'В метаданных модели не указан допустимый момент начала использования.';
 
   return <div className="forecast-model-info">
-    <p className="muted"><strong>{title}.</strong> {reason}{title === 'Резервный baseline' && ' Будет повторяться последняя известная мощность.'}</p>
+    <p className="muted"><strong>{title}.</strong> {reason}{title === 'Резервный baseline' && ' При наличии свежих измерений будет повторяться последняя известная мощность.'}</p>
     {model && <details><summary>Как проверена модель</summary>
-      {model.training_end && <p>Обучение: измерения раньше {shownTime(model.training_end)} UTC.</p>}
+      {model.training_end && <p>Текущая модель обучена на измерениях раньше {shownTime(model.training_end)} UTC.</p>}
+      {model.evaluation_training_end && <p>Для проверки использовалась отдельная модель, обученная только до {shownTime(model.evaluation_training_end)} UTC. Метрики ниже относятся к ней.</p>}
       {model.validation_start && model.validation_end && <p>Валидация: {shownTime(model.validation_start)} — {shownTime(model.validation_end)} UTC.</p>}
-      {typeof model.validation_mae === 'number' && Number.isFinite(model.validation_mae) && <p>MAE на валидации: ML {model.validation_mae.toFixed(3)}{typeof model.persistence_validation_mae === 'number' && Number.isFinite(model.persistence_validation_mae) && <> · baseline {model.persistence_validation_mae.toFixed(3)}</>}. Доля номинальной мощности; меньше — лучше.</p>}
+      {typeof model.validation_mae === 'number' && Number.isFinite(model.validation_mae) && <p>MAE на валидации: ML {model.validation_mae.toFixed(3)}{typeof comparisonMAE === 'number' && Number.isFinite(comparisonMAE) && <> · {model.weather_used ? 'замороженный baseline' : 'baseline'} {comparisonMAE.toFixed(3)}</>}{typeof model.mean_validation_mae === 'number' && Number.isFinite(model.mean_validation_mae) && <> · средняя мощность {model.mean_validation_mae.toFixed(3)}</>}. Доля номинальной мощности; меньше — лучше.</p>}
       {model.control_start && model.control_end && <p>Контроль: {shownTime(model.control_start)} — {shownTime(model.control_end)} UTC. Концы периодов не включены.</p>}
       <p>Контроль — ретроспективная проверка, а не официальный нетронутый тест. Гипотеза часового пояса выбиралась по всей доступной истории. Показанные ошибки относятся к валидации и не гарантируют точность нового прогноза.</p>
     </details>}
@@ -135,6 +149,7 @@ function ModelInfo({turbineId, settings, issue, models, loading, error}: {
 }
 
 export function ForecastPage({turbines}: {turbines: Turbine[]}) {
+  const [view, setView] = useState<'single' | 'replay' | 'automation'>('single');
   const [selected, setSelected] = useState<number[]>([]);
   const [settings, setSettings] = useState<Record<number, TimeSettings>>({});
   const [start, setStart] = useState('');
@@ -255,6 +270,12 @@ export function ForecastPage({turbines}: {turbines: Turbine[]}) {
 
   const currentReportIds = new Set(results.flatMap(result => result.report ? [result.report.id] : []));
   return <>
+    <div className="tabs forecast-view-tabs" role="group" aria-label="Режим прогнозирования">
+      <button type="button" className={view === 'single' ? 'active' : ''} aria-pressed={view === 'single'} disabled={busy} onClick={() => setView('single')}>Разовый прогноз</button>
+      <button type="button" className={view === 'replay' ? 'active' : ''} aria-pressed={view === 'replay'} disabled={busy} onClick={() => setView('replay')}>Месячный прогон</button>
+      <button type="button" className={view === 'automation' ? 'active' : ''} aria-pressed={view === 'automation'} disabled={busy} onClick={() => setView('automation')}>Автоматизация</button>
+    </div>
+    <div hidden={view !== 'single'}>
     <section className="panel forecast-panel">
       <div className="section-heading"><div><div className="eyebrow">Параметры расчёта</div><h2>Получить прогноз</h2></div><span className="tag">{configured === null ? 'Проверяем подключение…' : configured ? 'OpenAI подключён' : 'Ключ не настроен'}</span></div>
       <p className="muted">Выберите турбины и общий период прогноза. Для каждой турбины агент проверит измерения и сохранит отдельный результат.</p>
@@ -291,7 +312,7 @@ export function ForecastPage({turbines}: {turbines: Turbine[]}) {
           {issue !== null && issue > Date.now() && <p className="error" role="alert">Момент расчёта ещё не наступил. Начните прогноз не позднее следующего целого часа UTC.</p>}
           {horizon !== null && (horizon < 24 || horizon > 48) && <p className="error" role="alert">Выберите от 24 до 48 почасовых отметок включительно.</p>}
         </fieldset>
-        <div className="notice compact">Агент автоматически использует прошедшую отбор ML-модель, если совпадают измерения и настройки времени, а модель уже доступна на момент расчёта. Иначе используется резервный baseline — повтор последней известной мощности. ML работает по прошлой телеметрии и календарю, без будущей погоды. Часовой пояс CSV выбираете вы; UTC+6 остаётся гипотезой.</div>
+        <div className="notice compact">Агент выбирает доступную модель для выбранных данных и времени. Погодная модель проверяет исторический выпуск прогноза и может работать без новой телеметрии; модель по измерениям и резервный baseline требуют свежих данных. При неподходящих входных данных расчёт останавливается. Часовой пояс CSV выбираете вы; UTC+6 остаётся гипотезой.</div>
         <div className="filters forecast-actions">
           <button type="button" disabled={busy || !selectedTurbines.length || !datesValid} onClick={() => void run(false)}>Проверить данные бесплатно</button>
           <button type="submit" disabled={busy || configured !== true || !selectedTurbines.length || !datesValid}>{busy ? 'Обрабатываем очередь…' : `Получить прогноз${selectedTurbines.length > 1 ? 'ы' : ''}`}</button>
@@ -329,5 +350,8 @@ export function ForecastPage({turbines}: {turbines: Turbine[]}) {
         })}</div>;
       })}
     </section>
+    </div>
+    {view === 'replay' && <ReplayPanel turbines={turbines} configured={configured}/>}
+    {view === 'automation' && <AutomationPanel turbines={turbines} configured={configured}/>}
   </>;
 }

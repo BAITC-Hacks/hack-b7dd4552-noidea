@@ -4,6 +4,7 @@ import argparse
 import json
 import math
 import os
+import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
@@ -30,6 +31,7 @@ class AgentRequest(BaseModel):
     timestamp_semantics: Literal["interval_start", "interval_end"] | None = None
     horizon: int = Field(default=48, ge=24, le=48)
     event: Literal["manual", "data_updated", "weather_updated"] = "manual"
+    forecast_mode: Literal["auto", "weather", "telemetry"] = "auto"
 
     @field_validator("issue_at")
     @classmethod
@@ -76,24 +78,28 @@ TOOLS = [
     ),
     tool(
         "prepare_features",
-        "Получить последнее полное измерение, известное на issue_at. "
-        "Блокирует неизвестное время и устаревшую телеметрию.",
+        "Проверить модель и время. Погодной модели не нужна новая телеметрия; "
+        "резервная модель требует свежих измерений.",
     ),
     tool(
         "predict_power",
-        "Прогноз по проверенной модели прошлой телеметрии, если подходит артефакт. "
-        "Иначе persistence с явной причиной. Будущая погода не используется.",
+        "Прогноз по выбранной проверенной модели. Погодная модель использует только "
+        "допустимый архивный выпуск; резервный путь использует прошлую телеметрию.",
     ),
     tool("check_forecast", "Проверить длину, время, диапазон и конечность прогноза."),
+    tool("analyze_forecast", "Проанализировать диапазон, резкие изменения и ограничения прогноза."),
     tool("save_forecast", "Сохранить только проверенный численный прогноз."),
 ]
 INSTRUCTIONS = """Ты диспетчер ВЭС. Выполняй задачу инструментами, отвечай кратко по-русски.
 Сначала inspect_data. Если данных нет или время не задано — остановись и объясни блокировку.
-Затем prepare_features; если телеметрия устарела или невалидна — остановись, не прогнозируй.
+Затем prepare_features; при ok=false остановись и объясни причину.
+forecast_route=weather: новая телеметрия не требуется, но нужен допустимый выпуск погоды.
 Для готовых данных вызови fetch_weather(previous_run=false). При временном отказе попробуй
 previous_run=true ровно один раз. Если погода недоступна или historical_eligibility=unverified,
-это не мешает численному прогнозу: модели прошлой телеметрии и persistence не используют погоду.
-Далее predict_power, check_forecast, save_forecast. Нельзя говорить, что сохранено, до успеха
+погодный маршрут должен остановиться; для маршрута telemetry погода не является признаком.
+Далее predict_power, check_forecast, analyze_forecast, save_forecast.
+При ошибке инструмента остановись.
+Нельзя говорить, что сохранено, до успеха
 save_forecast. Не выдумывай значения, причины аварий и качество модели. Называй расчёт
 именем из predict_power.model; явно указывай fallback_reason, если есть. Не обещай точность.
 Для события обновления пересчитай по новым данным.
@@ -103,9 +109,18 @@ save_forecast. Не выдумывай значения, причины авар
 
 
 class ToolSession:
-    def __init__(self, request: AgentRequest, weather_provider=fetch_weather):
+    def __init__(
+        self,
+        request: AgentRequest,
+        weather_provider=fetch_weather,
+        issue_weather_provider=None,
+        run_id=None,
+    ):
         self.request = request
         self.weather_provider = weather_provider
+        self.issue_weather_provider = issue_weather_provider
+        self.weather = None
+        self.analysis = None
         self.features = None
         self.forecast = None
         self.raw_measurements = None
@@ -113,7 +128,9 @@ class ToolSession:
         self.checked = False
         self.inspected = False
         self.weather_calls = 0
-        self.id = uuid4().hex
+        self.id = run_id or uuid4().hex
+        if not re.fullmatch(r"[0-9a-f]{32}", self.id):
+            raise ValueError("Некорректный идентификатор запуска")
         self.dataset = next(
             (d for d in all_metadata("datasets") if d["id"] == request.turbine_id), None
         )
@@ -150,6 +167,31 @@ class ToolSession:
             return {"ok": False, "code": "inspect_data_first"}
         if not r.measurement_timezone or not r.timestamp_semantics:
             return {"ok": False, "code": "time_unconfirmed"}
+        if r.forecast_mode != "telemetry":
+            from wind.nwp import model_readiness
+
+            ready = model_readiness(
+                self.dataset,
+                timezone=r.measurement_timezone,
+                semantics=r.timestamp_semantics,
+                issue_at=r.issue_at,
+                horizon=r.horizon,
+            )
+            if ready["ok"]:
+                self.features = {
+                    "forecast_route": "weather",
+                    "telemetry_required": False,
+                    "weather_pending": True,
+                    "source_sha256": self.dataset["sha256"],
+                    "model_sha256": ready["model_sha256"],
+                }
+                return {"ok": True, **self.features, "model_readiness": ready}
+            if r.forecast_mode == "weather":
+                return {
+                    "ok": False,
+                    "code": "weather_model_unavailable",
+                    "detail": ready.get("reason", "Нет подходящего погодного артефакта"),
+                }
         # Use original 10-min data to respect interval-end semantics across hour boundaries.
         raw_path = self.dataset["hourly_path"].replace("-hourly.parquet", "-10min.parquet")
         raw = pd.read_parquet(data_dir() / raw_path)
@@ -174,6 +216,7 @@ class ToolSession:
         if age > 2:
             return {"ok": False, "code": "stale_telemetry", "age_hours": age, "max_age_hours": 2}
         self.features = {
+            "forecast_route": "telemetry",
             "last_power": float(latest.power),
             "available_at": available.isoformat(),
             "age_hours": age,
@@ -185,6 +228,42 @@ class ToolSession:
         if self.weather_calls >= 2:
             return {"ok": False, "code": "weather_retry_limit"}
         self.weather_calls += 1
+        if self.features and self.features.get("forecast_route") == "weather":
+            from wind.archive import fetch_issue_weather
+
+            provider = self.issue_weather_provider or fetch_issue_weather
+            try:
+                self.weather = provider(
+                    self.request.turbine_id,
+                    self.request.issue_at,
+                    horizon=self.request.horizon,
+                    previous_run=previous_run,
+                )
+                return {
+                    "ok": True,
+                    **{
+                        key: self.weather.get(key)
+                        for key in (
+                            "run",
+                            "available_at",
+                            "historical_eligibility",
+                            "provider",
+                            "model",
+                            "sha256",
+                            "hours",
+                            "availability_policy",
+                        )
+                    },
+                    "usable_for_weather_model": True,
+                }
+            except (httpx.HTTPError, ValueError, OSError) as exc:
+                self.weather = None
+                return {
+                    "ok": False,
+                    "code": "weather_unavailable",
+                    "detail": str(exc)[:300],
+                    "retryable": self.weather_calls < 2,
+                }
         # 12h margin is a request-selection heuristic, NOT proof of historical availability.
         run = self.request.issue_at - timedelta(hours=12 + (6 if previous_run else 0))
         run = run.replace(hour=run.hour // 6 * 6)
@@ -212,14 +291,40 @@ class ToolSession:
     def predict_power(self):
         if not self.features:
             return {"ok": False, "code": "features_required"}
-        self.forecast, self.prediction_metadata = predict_with_ml(
-            self.raw_measurements,
-            self.dataset,
-            timezone=self.request.measurement_timezone,
-            semantics=self.request.timestamp_semantics,
-            issue_at=self.request.issue_at,
-            horizon=self.request.horizon,
-        )
+        if self.features.get("forecast_route") == "weather":
+            from wind.nwp import predict_with_nwp
+
+            if self.weather is None:
+                return {"ok": False, "code": "eligible_weather_required"}
+            weather_frame = pd.DataFrame(self.weather["points"])
+            weather_frame.attrs["provenance"] = self.weather.get("provenance")
+            self.forecast, self.prediction_metadata = predict_with_nwp(
+                self.dataset,
+                weather_frame,
+                timezone=self.request.measurement_timezone,
+                semantics=self.request.timestamp_semantics,
+                issue_at=self.request.issue_at,
+                horizon=self.request.horizon,
+                expected_model_sha256=self.features["model_sha256"],
+            )
+            if self.forecast is None:
+                return {
+                    "ok": False,
+                    "code": "weather_prediction_failed",
+                    **self.prediction_metadata,
+                }
+            self.prediction_metadata["weather_provenance"] = {
+                key: value for key, value in self.weather.items() if key != "points"
+            }
+        else:
+            self.forecast, self.prediction_metadata = predict_with_ml(
+                self.raw_measurements,
+                self.dataset,
+                timezone=self.request.measurement_timezone,
+                semantics=self.request.timestamp_semantics,
+                issue_at=self.request.issue_at,
+                horizon=self.request.horizon,
+            )
         if self.forecast is None:
             self.forecast = [
                 {
@@ -229,9 +334,14 @@ class ToolSession:
                 for h in range(1, self.request.horizon + 1)
             ]
         self.checked = False
+        self.analysis = None
         return {
             "ok": True,
-            **self.prediction_metadata,
+            **{
+                key: value
+                for key, value in self.prediction_metadata.items()
+                if key != "weather_provenance"
+            },
             "hours": len(self.forecast),
             "power_min": min(p["power"] for p in self.forecast),
             "power_max": max(p["power"] for p in self.forecast),
@@ -249,6 +359,24 @@ class ToolSession:
         )
         return {"ok": self.checked, "code": "valid" if self.checked else "invalid_forecast"}
 
+    def analyze_forecast(self):
+        if not self.check_forecast()["ok"]:
+            return {"ok": False, "code": "valid_forecast_required"}
+        values = [point["power"] for point in self.forecast]
+        ramps = [abs(right - left) for left, right in zip(values, values[1:])]
+        self.analysis = {
+            "power_min": min(values),
+            "power_max": max(values),
+            "power_mean": sum(values) / len(values),
+            "max_hourly_change": max(ramps, default=0),
+            "flat_forecast": max(values) - min(values) < 1e-6,
+            "large_ramps": sum(ramp > 0.3 for ramp in ramps),
+            "units": "fraction_of_turbine_rated_power",
+            "accuracy_observed": False,
+            "note": "Диагностика прогноза, не оценка точности. Факт не использован.",
+        }
+        return {"ok": True, **self.analysis}
+
     def save_forecast(self):
         if not self.checked or not self.check_forecast()["ok"]:
             return {"ok": False, "code": "check_required"}
@@ -262,6 +390,7 @@ class ToolSession:
                     "model_metadata": self.prediction_metadata,
                     "features": self.features,
                     "points": self.forecast,
+                    "analysis": self.analyze_forecast(),
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -277,7 +406,13 @@ def factual_summary(report: dict) -> str:
         prediction = next(
             (s["result"] for s in reversed(steps) if s["tool"] == "predict_power"), {}
         )
-        if prediction.get("model") == "telemetry_hist_gradient_boosting":
+        if prediction.get("weather_used") is True:
+            text = (
+                "Проверен и сохранён погодный ML-прогноз. "
+                "Использован архивный выпуск с проверкой доступности на момент расчёта; "
+                "новые измерения турбины не требуются."
+            )
+        elif prediction.get("model") == "telemetry_hist_gradient_boosting":
             text = (
                 "Проверен и сохранён ML-прогноз по прошлой телеметрии. "
                 "Будущая погода не используется."
@@ -293,7 +428,7 @@ def factual_summary(report: dict) -> str:
         weather = [s["result"] for s in steps if s["tool"] == "fetch_weather"]
         if weather and not any(w.get("ok") for w in weather):
             text += " Погодный источник недоступен после попыток загрузки."
-        elif any(w.get("ok") for w in weather):
+        elif any(w.get("ok") for w in weather) and not prediction.get("weather_used"):
             text += " Архив погоды получен; его историческая доступность не подтверждена."
         return text + " Фактическая точность на выбранном будущем периоде ещё не известна."
     if "stale_telemetry" in codes:
@@ -304,20 +439,36 @@ def factual_summary(report: dict) -> str:
         return "Прогноз не создан: укажите подтверждённые часовой пояс и смысл отметки времени CSV."
     if "no_measurements" in codes:
         return "Прогноз не создан: измерения отсутствуют."
+    if codes & {
+        "weather_model_unavailable",
+        "eligible_weather_required",
+        "weather_prediction_failed",
+    }:
+        return (
+            "Прогноз не создан: нужны совместимая погодная модель и доступный исторический выпуск."
+        )
     return "Прогноз не завершён. Проверьте статус и результаты инструментов в журнале."
 
 
-def run_agent(request: AgentRequest, *, weather_provider=fetch_weather, simulated=False):
+def run_agent(
+    request: AgentRequest,
+    *,
+    weather_provider=fetch_weather,
+    issue_weather_provider=None,
+    simulated=False,
+    run_id=None,
+):
     load_dotenv(PROJECT / ".env", override=False)
     key = os.environ.get("OPENAI_API_KEY")
     if not key:
         raise ValueError("OPENAI_API_KEY не настроен на сервере")
-    session = ToolSession(request, weather_provider)
+    session = ToolSession(request, weather_provider, issue_weather_provider, run_id=run_id)
     transcript = [{"role": "user", "content": json.dumps(request.model_dump(mode="json"))}]
     report = {
         "id": session.id,
         "request": request.model_dump(mode="json"),
         "model": os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"),
+        "execution_mode": "llm",
         "simulated": simulated,
         "status": "running",
         "steps": [],
@@ -402,12 +553,81 @@ def run_agent(request: AgentRequest, *, weather_provider=fetch_weather, simulate
     return report
 
 
+def run_tools(
+    request: AgentRequest,
+    *,
+    weather_provider=fetch_weather,
+    issue_weather_provider=None,
+    run_id=None,
+):
+    """Reproducible numerical replay. Explicitly NOT an LLM decision trace."""
+    session = ToolSession(request, weather_provider, issue_weather_provider, run_id=run_id)
+    report = {
+        "id": session.id,
+        "request": request.model_dump(mode="json"),
+        "model": None,
+        "execution_mode": "tools",
+        "simulated": False,
+        "status": "running",
+        "steps": [],
+        "input_tokens": 0,
+        "output_tokens": 0,
+    }
+
+    def call(name, arguments=None):
+        arguments = arguments or {}
+        result = session.execute(name, arguments)
+        report["steps"].append(
+            {
+                "step": len(report["steps"]) + 1,
+                "tool": name,
+                "arguments": arguments,
+                "result": result,
+            }
+        )
+        return result
+
+    try:
+        inspected = call("inspect_data")
+        if not inspected.get("ok") or not inspected.get("time_configured"):
+            report["status"] = "stopped_without_forecast"
+        elif not call("prepare_features").get("ok"):
+            report["status"] = "stopped_without_forecast"
+        else:
+            weather = call("fetch_weather", {"previous_run": False})
+            if not weather.get("ok") and weather.get("retryable"):
+                weather = call("fetch_weather", {"previous_run": True})
+            if not weather.get("ok") and session.features.get("forecast_route") == "weather":
+                report["status"] = "stopped_without_forecast"
+            else:
+                for name in (
+                    "predict_power",
+                    "check_forecast",
+                    "analyze_forecast",
+                    "save_forecast",
+                ):
+                    if not call(name).get("ok"):
+                        report["status"] = "stopped_without_forecast"
+                        break
+                else:
+                    report["status"] = "forecast_saved"
+    except (OSError, ValueError, httpx.HTTPError) as exc:
+        report["status"] = "execution_error"
+        report["error"] = str(exc)[:300]
+    report["summary"] = factual_summary(report)
+    folder = data_dir() / "agent-runs"
+    folder.mkdir(exist_ok=True)
+    (folder / f"{session.id}.json").write_text(json.dumps(report, ensure_ascii=False, indent=2))
+    return report
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--turbine-id", type=int, required=True)
     parser.add_argument("--issue-at", required=True)
     parser.add_argument("--measurement-timezone")
     parser.add_argument("--timestamp-semantics", choices=["interval_start", "interval_end"])
+    parser.add_argument("--forecast-mode", choices=["auto", "weather", "telemetry"], default="auto")
     args = parser.parse_args()
     report = run_agent(AgentRequest(**vars(args)))
     print(json.dumps(report, ensure_ascii=False, indent=2))

@@ -1,24 +1,34 @@
 import json
 import os
 import re
+from contextlib import asynccontextmanager
 from datetime import date, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from threading import Lock
 
 import httpx
 import pandas as pd
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query, Request, UploadFile
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
 from wind.agent import PROJECT as AGENT_PROJECT
 from wind.agent import AgentRequest, ToolSession, run_agent
+from wind.automation import (
+    AutomationSettings,
+    enqueue_event,
+    get_settings,
+    list_events,
+    recover_interrupted,
+    run_event,
+    set_settings,
+)
 from wind.discovery import router as discovery_router
 from wind.ingest import import_csv
 from wind.ml import MODEL_TYPE, model_catalog
+from wind.replay import RUN_LOCK, ReplayRequest, create_job, export_csv, get_job, list_jobs, run_job
 from wind.sources import router as sources_router
 from wind.storage import (
     all_metadata,
@@ -29,16 +39,36 @@ from wind.storage import (
     get_turbine,
     restore_turbine,
 )
+from wind.turbine_specs import router as turbine_specs_router
 from wind.weather import WeatherRequest, fetch_weather, weather_detail
 
 PROJECT = Path(__file__).resolve().parents[2]
 
 
-app = FastAPI(title="ВЭС · Data Explorer", version="0.2.0")
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    recover_interrupted()
+    yield
+
+
+app = FastAPI(title="ВЭС · Data Explorer", version="0.3.0", lifespan=lifespan)
 
 
 app.include_router(sources_router)
 app.include_router(discovery_router)
+app.include_router(turbine_specs_router)
+
+
+def schedule_update(background_tasks, event, turbine_id, revision, result, *, issue_at=None):
+    try:
+        event_id = enqueue_event(event, turbine_id, revision, issue_at=issue_at)
+        if event_id:
+            background_tasks.add_task(run_event, event_id)
+            result["automation_event_id"] = event_id
+    except (ValueError, OSError) as exc:
+        # The import/download has succeeded. An automation failure must not undo it.
+        result["automation_error"] = str(exc)[:200]
+    return result
 
 
 class TurbineInput(BaseModel):
@@ -83,7 +113,7 @@ def unarchive_turbine(turbine_id: int):
 
 
 @app.post("/api/turbines/{turbine_id}/import")
-def upload_csv(turbine_id: int, file: UploadFile):
+def upload_csv(turbine_id: int, file: UploadFile, background_tasks: BackgroundTasks):
     try:
         get_turbine(turbine_id)
     except ValueError as exc:
@@ -100,7 +130,10 @@ def upload_csv(turbine_id: int, file: UploadFile):
                     if size > 25 * 1024 * 1024:
                         raise HTTPException(413, "Максимальный размер файла — 25 МБ")
                     target.write(chunk)
-            return import_csv(path, turbine_id, "user")
+            result = import_csv(path, turbine_id, "user")
+            return schedule_update(
+                background_tasks, "data_updated", turbine_id, result["sha256"], result
+            )
     except (ValueError, UnicodeError, pd.errors.ParserError) as exc:
         raise HTTPException(422, f"CSV не импортирован: {exc}") from exc
     finally:
@@ -200,7 +233,7 @@ def weather_raw(key: str):
 
 
 @app.post("/api/weather")
-def weather_fetch(body: WeatherRequest):
+def weather_fetch(body: WeatherRequest, background_tasks: BackgroundTasks):
     try:
         get_turbine(body.turbine_id)
     except ValueError as exc:
@@ -219,25 +252,52 @@ def weather_fetch(body: WeatherRequest):
         raise HTTPException(502, f"Ответ погоды не прошёл проверку: {exc}") from exc
 
 
-_agent_lock = Lock()
+@app.post("/api/weather/gfs")
+def operational_weather(body: AgentRequest, background_tasks: BackgroundTasks):
+    from wind.archive import fetch_issue_weather
+
+    try:
+        result = fetch_issue_weather(body.turbine_id, body.issue_at, horizon=body.horizon)
+        return schedule_update(
+            background_tasks,
+            "weather_updated",
+            body.turbine_id,
+            result["sha256"],
+            result,
+            issue_at=body.issue_at,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except (httpx.HTTPError, OSError) as exc:
+        raise HTTPException(502, "Не удалось получить оперативный архив GFS") from exc
+
+
+_agent_lock = RUN_LOCK
 
 
 @app.get("/api/ml/models")
 def ml_models():
-    return {"items": model_catalog()}
+    from wind.nwp import model_catalog as nwp_catalog
+
+    return {"items": model_catalog() + nwp_catalog()}
 
 
 @app.get("/api/agent/status")
 def agent_status():
     load_dotenv(AGENT_PROJECT / ".env", override=False)
-    models = model_catalog()
+    models = ml_models()["items"]
+    weather_models = [
+        m for m in models if m.get("weather_used") and m.get("promoted") and m.get("source_matches")
+    ]
     return {
         "configured": bool(os.environ.get("OPENAI_API_KEY")),
         "model": os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"),
-        "forecast_model": MODEL_TYPE
+        "forecast_model": weather_models[0]["model_type"]
+        if weather_models
+        else MODEL_TYPE
         if any(m.get("promoted") and m.get("source_matches") for m in models)
         else "persistence_baseline",
-        "forecast_policy": "validated_ml_or_persistence",
+        "forecast_policy": "validated_weather_then_telemetry_or_persistence",
     }
 
 
@@ -301,6 +361,67 @@ def get_forecast(forecast_id: str):
     if not path.exists():
         raise HTTPException(404, "Прогноз не найден")
     return FileResponse(path, filename=f"forecast-{forecast_id}.json")
+
+
+@app.get("/api/replays")
+def replay_list():
+    return {"items": list_jobs()}
+
+
+@app.post("/api/replays", status_code=202)
+def replay_create(body: ReplayRequest, background_tasks: BackgroundTasks):
+    try:
+        job = create_job(body)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    background_tasks.add_task(run_job, job["id"])
+    return job
+
+
+@app.get("/api/replays/{job_id}")
+def replay_get(job_id: str):
+    try:
+        return get_job(job_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.get("/api/replays/{job_id}/export")
+def replay_export(job_id: str, kind: str = Query(pattern="^(forecasts|coverage|report|plant)$")):
+    job = replay_get(job_id)
+    if kind == "report":
+        return Response(
+            json.dumps(job, ensure_ascii=False, indent=2),
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="replay-{job_id}.json"'},
+        )
+    try:
+        content = export_csv(job, kind)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return Response(
+        content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="replay-{job_id}-{kind}.csv"'},
+    )
+
+
+@app.get("/api/automation")
+def automation_get():
+    return get_settings().model_dump(mode="json")
+
+
+@app.put("/api/automation")
+def automation_put(body: AutomationSettings):
+    try:
+        return set_settings(body).model_dump(mode="json")
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@app.get("/api/automation/events")
+def automation_events():
+    return {"items": list_events()}
 
 
 def mount_frontend(application: FastAPI, directory: Path):
