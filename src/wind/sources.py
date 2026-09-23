@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from wind.storage import all_metadata, data_dir, save_metadata
+from wind.storage import TurbineNotFoundError, all_metadata, data_dir, save_metadata
 
 router = APIRouter(prefix="/api/sources", tags=["sources"])
 LIMIT = 2 * 1024 * 1024
@@ -376,6 +376,8 @@ def suggest(config: SourceInput):
 def safe_call(fn, *args):
     try:
         return fn(*args)
+    except TurbineNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
     except (ValueError, KeyError, TypeError, UnicodeError) as exc:
         raise HTTPException(422, str(exc)[:500]) from exc
     except (OSError, httpx.HTTPError, http.client.HTTPException) as exc:

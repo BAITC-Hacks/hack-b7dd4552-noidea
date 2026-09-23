@@ -11,25 +11,41 @@ async function request<T>(path:string, method='GET', body?:unknown):Promise<T> {
   if(!response.ok) throw new Error(typeof value.detail==='string'?value.detail:JSON.stringify(value.detail));
   return value;
 }
-export function SourcesPanel({turbine}:{turbine?:{id:number;name:string;has_data:boolean;start:string;end:string;latitude:number;longitude:number}}) {
+export function SourcesPanel({turbine,onBusyChange}:{onBusyChange?:(busy:boolean)=>void;turbine?:{id:number;name:string;has_data:boolean;start:string;end:string;latitude:number;longitude:number}}) {
+  const [discoveryBusy,setDiscoveryBusy]=useState(false);
+  const [view,setView]=useState<'list'|'new'|'builtin'|'edit'>('list');
   const [items,setItems]=useState<Source[]>([]),[draft,setDraft]=useState<Source>(empty),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
   const [proposal,setProposal]=useState<Proposal|null>(null),[result,setResult]=useState<Result|null>(null),[dirty,setDirty]=useState(false);
+  const active=busy||discoveryBusy;
+  useEffect(()=>{
+    onBusyChange?.(active);
+    if(!active)return;
+    const warn=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue='';};
+    window.addEventListener('beforeunload',warn);
+    return()=>window.removeEventListener('beforeunload',warn);
+  },[active,onBusyChange]);
   const refresh=async()=>setItems((await request<{items:Source[]}>('')).items);
   useEffect(()=>{void refresh().catch(e=>setError(e.message));},[]);
   const change=(values:Partial<Source>)=>{setDraft(d=>({...d,...values}));setDirty(true);setResult(null);setProposal(null);setMessage('');};
   const field=(key:keyof Mapping,value:string|number|null)=>change({mapping:{...draft.mapping,[key]:value}});
   const task=async(fn:()=>Promise<void>)=>{setBusy(true);setError('');setMessage('');setResult(null);try{await fn();}catch(e){setError((e as Error).message);}finally{setBusy(false);}};
-  const choose=(source:Source)=>{setDraft(source);setDirty(false);setProposal(null);setResult(null);setError('');setMessage('');};
+  const choose=(source:Source)=>{setView(source.id?'edit':'new');setDraft(source);setDirty(false);setProposal(null);setResult(null);setError('');setMessage('');};
   const body=()=>{const {id,revision,...values}=draft;void id;void revision;return values;};
   return <section id="sources" className="panel sources-panel">
-    <div className="section-heading"><div><div className="eyebrow">Подключение данных</div><h2>Доверенные источники</h2></div><span className="tag">JSON / CSV</span></div>
-    <DiscoveryPanel key={turbine?.id??"empty"} turbine={turbine} onLoaded={refresh}/>
-    <h3>Ручная настройка подключения</h3>
-    <p className="muted">Добавьте публичный адрес данных. Агент предложит соответствие полей по образцу и выдержке из документации. Неизвестные параметры задайте вручную.</p>
-    <p className="small muted">Архив ECMWF выше использует отдельный встроенный адаптер. Эти подключения сохраняют дополнительные данные; baseline-прогноз их пока не использует.</p>
-    <div className="tabs">{items.map(s=><button disabled={busy} key={s.id} onClick={()=>choose(s)} className={draft.id===s.id?'active':''}>{s.name}{!s.enabled?' · выключен':''}</button>)}<button disabled={busy} onClick={()=>choose(empty())}>+ Новый источник</button><button disabled={busy} onClick={()=>choose({...empty(),name:'Open-Meteo · пример за 25.01.2026',url:'https://archive-api.open-meteo.com/v1/archive?latitude=43.64515&longitude=78.535604&start_date=2026-01-25&end_date=2026-01-25&hourly=wind_speed_100m,temperature_2m&models=era5&timezone=GMT&wind_speed_unit=ms',notes:'Open-Meteo Historical Weather API: GMT = UTC; wind_speed_100m — скорость ветра на высоте 100 м в м/с; temperature_2m — температура в °C. Значения мгновенные, время ISO 8601. Документация: https://open-meteo.com/en/docs/historical-weather-api'})}>Заполнить пример Open-Meteo</button></div>
-    <form onSubmit={e=>{e.preventDefault();void task(async()=>{const saved=await request<Source>(draft.id?'/'+draft.id:'',draft.id?'PUT':'POST',body());setDraft(saved);setDirty(false);setResult(null);await refresh();setMessage('Настройки сохранены. Проверьте загрузку.');});}}>
-      <fieldset disabled={busy}>
+    <div className="section-heading"><h2>{view==='list'?'Подключённые источники':view==='builtin'?'Open-Meteo':view==='new'?'Добавление источника':draft.name}</h2>{view==='list'?<button className="source-primary" onClick={()=>choose(empty())}>+ Добавить источник</button>:<button className="source-secondary" disabled={active} onClick={()=>{setView('list');setError('');setMessage('');}}>← Все источники</button>}</div>
+    {active&&<p className="notice compact" role="status">Дождитесь завершения запроса перед переходом на другую страницу.</p>}
+    {error&&<div className="error" role="alert">{error}</div>}
+    {view==='list'&&<div className="source-cards">
+      <article className="source-card"><div className="section-heading"><h3>Open-Meteo</h3><span className="tag">По умолчанию</span></div><p className="muted">Архив погоды, исторические выпуски и текущие прогнозы.</p><span className="small muted">open-meteo.com</span><button className="source-primary" onClick={()=>setView('builtin')}>Открыть источник →</button></article>
+      {items.map(source=><article className="source-card" key={source.id}><div className="section-heading"><h3>{source.name}</h3><span className="tag">{!source.enabled?'Выключен':source.trusted?'Включён':'Не подтверждён'}</span></div><p className="muted">{new URL(source.url).hostname}</p><span className="small muted">{source.format.toUpperCase()} · версия {source.revision}</span><button className="source-secondary" onClick={()=>choose(source)}>Настроить →</button></article>)}
+    </div>}
+    {view==='builtin'&&<><p className="muted">Источник доступен по умолчанию. Подберите данные по выбранной турбине или откройте архив отдельных выпусков.</p><p><a href="/weather">Перейти к архиву выпусков ECMWF ↗</a></p><DiscoveryPanel key={'open-meteo-'+(turbine?.id??'empty')} turbine={turbine} initialSite="open-meteo.com" onLoaded={refresh} onBusyChange={setDiscoveryBusy} disabled={busy}/></>}
+    {(view==='new'||view==='edit')&&<>
+    {view==='new'&&<DiscoveryPanel key={'new-'+(turbine?.id??'empty')} turbine={turbine} onLoaded={refresh} onBusyChange={setDiscoveryBusy} disabled={busy}/>}
+    <details className="source-advanced" open={view==='edit'} key={view}><summary>{view==='edit'?'Настройки подключения':'Настроить API вручную'}</summary>
+    <p className="muted">Укажите адрес JSON/CSV и соответствие полей. Агент может предложить настройки по образцу ответа.</p>
+    <form onSubmit={e=>{e.preventDefault();void task(async()=>{const saved=await request<Source>(draft.id?'/'+draft.id:'',draft.id?'PUT':'POST',body());setDraft(saved);setView('edit');setDirty(false);setResult(null);await refresh();setMessage('Настройки сохранены. Проверьте загрузку.');});}}>
+      <fieldset disabled={active}>
         <div className="source-grid">
           <label>Название<input required value={draft.name} onChange={e=>change({name:e.target.value})}/></label>
           <label>Формат<select value={draft.format} onChange={e=>change({format:e.target.value})}><option value="json">JSON</option><option value="csv">CSV UTF-8</option></select></label>
@@ -51,8 +67,10 @@ export function SourcesPanel({turbine}:{turbine?:{id:number;name:string;has_data
       </fieldset>
     </form>
     <p className="muted small">Агент получает образец ответа и текст документации. Только эта кнопка использует API-кредиты. Предложение не сохраняется автоматически. Лимит ответа источника — 2 МБ. Постоянный UTC+6 обозначается Etc/GMT-6.</p>
-    {busy&&<p role="status">Выполняется запрос…</p>}{error&&<div className="error" role="alert">{error}</div>}{message&&<p role="status">{message}</p>}
-    {proposal&&<div className="notice"><strong>Предложение агента</strong><p>{proposal.explanation}</p>{proposal.unresolved.length>0&&<p>Уточнить: {proposal.unresolved.join('; ')}</p>}<p>Проверка образца: {proposal.validation.ok?`${proposal.validation.rows} строк`:proposal.validation.error}</p><pre>{JSON.stringify(proposal.mapping,null,2)}</pre><p>Токены: {proposal.usage.input_tokens} / {proposal.usage.output_tokens}</p><button disabled={busy} onClick={()=>{setDraft(d=>({...d,mapping:proposal.mapping}));setDirty(true);setProposal(null);setResult(null);setMessage('Предложение перенесено в форму. Проверьте поля и сохраните настройки.');}}>Перенести в форму</button></div>}
+    {busy&&<p role="status">Выполняется запрос…</p>}{message&&<p role="status">{message}</p>}
+    {proposal&&<div className="notice"><strong>Предложение агента</strong><p>{proposal.explanation}</p>{proposal.unresolved.length>0&&<p>Уточнить: {proposal.unresolved.join('; ')}</p>}<p>Проверка образца: {proposal.validation.ok?`${proposal.validation.rows} строк`:proposal.validation.error}</p><pre>{JSON.stringify(proposal.mapping,null,2)}</pre><p>Токены: {proposal.usage.input_tokens} / {proposal.usage.output_tokens}</p><button disabled={active} onClick={()=>{setDraft(d=>({...d,mapping:proposal.mapping}));setDirty(true);setProposal(null);setResult(null);setMessage('Предложение перенесено в форму. Проверьте поля и сохраните настройки.');}}>Перенести в форму</button></div>}
     {result&&<div><p>Проверено строк: {result.rows}. Время UTC, ветер м/с, температура °C.</p><pre>{JSON.stringify(result.preview,null,2)}</pre>{result.batch_id&&<a href={'/api/sources/batches/'+result.batch_id} target="_blank" rel="noreferrer">Открыть сохранённые данные JSON ↗</a>}<p className="muted small">Время публикации не подтверждено: историческая доступность для прогнозирования не установлена.</p></div>}
+    </details>
+    </>}
   </section>;
 }

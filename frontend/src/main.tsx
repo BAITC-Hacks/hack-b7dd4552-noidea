@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './style.css';
 import {SourcesPanel} from './SourcesPanel';
+import {ForecastPage} from './ForecastPage';
+import {DeletedTurbines, TurbineDelete} from './TurbineActions';
 
 type Point = {time: string; [key: string]: string | number | null};
 type Dataset = {
@@ -115,91 +117,71 @@ function WeatherPanel({turbineId}: {turbineId: number}) {
   </section>;
 }
 
-function TurbineForm({onCreated}: {onCreated: (t: Dataset) => Promise<void>}) {
+function TurbineForm({onCreated, onCancel}: {onCreated: (t: Dataset) => Promise<void>; onCancel: () => void}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  return <section className="panel"><h2>Новая турбина</h2><p className="muted">Координаты нужны для получения погодного прогноза.</p>
-    <form className="filters" onSubmit={async e => {
-      e.preventDefault(); const form = e.currentTarget; const data = new FormData(form);
-      setBusy(true); setError('');
-      try { const t = await api<Dataset>('/api/turbines', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: data.get('name'), latitude: Number(data.get('latitude')), longitude: Number(data.get('longitude'))})}); await onCreated(t); form.reset(); }
-      catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  const submitting = useRef(false);
+  return <section className="panel turbine-form"><h2>Параметры турбины</h2><p className="muted">Координаты нужны для подбора погодных данных. CSV можно импортировать после создания.</p>
+    <form onSubmit={async e => {
+      e.preventDefault();
+      if (submitting.current) return;
+      const data = new FormData(e.currentTarget);
+      submitting.current = true; setBusy(true); setError('');
+      try {
+        const t = await api<Dataset>('/api/turbines', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: data.get('name'), latitude: Number(data.get('latitude')), longitude: Number(data.get('longitude'))})});
+        await onCreated(t);
+      } catch (e) { setError((e as Error).message); }
+      finally { submitting.current = false; setBusy(false); }
     }}>
-      <label>Название<input name="name" required maxLength={100} placeholder="Например, Турбина 1"/></label>
-      <label>Широта, °<input name="latitude" required type="number" step="any" min="-90" max="90" placeholder="43.645150"/></label>
-      <label>Долгота, °<input name="longitude" required type="number" step="any" min="-180" max="180" placeholder="78.535604"/></label>
-      <button disabled={busy}>{busy ? 'Сохраняем…' : 'Добавить'}</button>
+      <fieldset className="turbine-form-fields" disabled={busy}>
+        <label className="turbine-form-wide">Название<input name="name" required maxLength={100} placeholder="Например, Турбина 1" autoFocus/></label>
+        <label>Широта, °<input name="latitude" required type="number" step="any" min="-90" max="90" placeholder="43.645150"/></label>
+        <label>Долгота, °<input name="longitude" required type="number" step="any" min="-180" max="180" placeholder="78.535604"/></label>
+        <div className="filters turbine-form-wide">
+          <button type="submit">{busy ? 'Сохраняем…' : 'Создать турбину'}</button>
+          <button type="button" className="secondary-action" onClick={onCancel}>Отмена</button>
+        </div>
+      </fieldset>
     </form>{error && <div className="error" role="alert">{error}</div>}
   </section>;
 }
 
-function ImportPanel({turbine, onImported}: {turbine: Dataset; onImported: () => Promise<void>}) {
+function ImportPanel({turbine, onImported, disabled, onBusyChange}: {turbine: Dataset; onImported: () => Promise<void>; disabled: boolean; onBusyChange: (busy: boolean) => void}) {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  useEffect(() => { onBusyChange(busy); }, [busy, onBusyChange]);
+  useEffect(() => () => onBusyChange(false), [onBusyChange]);
   return <section className="panel"><div className="section-heading"><h2>Измерения · {turbine.name}</h2><span className="tag">Широта {turbine.latitude}° · долгота {turbine.longitude}°</span></div>
     <p className="muted">Загрузите CSV в UTF-8, до 25 МБ. Исходный файл сохранится, данные пройдут проверку перед импортом.</p>
     {turbine.has_data && <p className="muted">Новый импорт заменит активный набор измерений этой турбины. Предыдущие исходники сохранятся.</p>}
-    <form className="filters" onSubmit={async e => {e.preventDefault(); if (!file) return; setBusy(true); setError(''); setSuccess('');
+    <form className="filters" onSubmit={async e => {e.preventDefault(); if (!file || busy || disabled) return; setBusy(true); setError(''); setSuccess('');
       const body = new FormData(); body.append('file', file);
       try { const result = await api<Dataset>(`/api/turbines/${turbine.id}/import`, {method: 'POST', body}); await onImported(); setSuccess(`Импортировано ${n(result.rows)} строк. Полных часов: ${n(result.complete_hours)}.`); }
       catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-    }}><label>Файл измерений<input type="file" accept=".csv,text/csv" required onChange={e => setFile(e.target.files?.[0] ?? null)}/></label><button disabled={!file || busy}>{busy ? 'Проверяем и импортируем…' : 'Импортировать CSV'}</button></form>
+    }}><label>Файл измерений<input type="file" accept=".csv,text/csv" disabled={busy || disabled} required onChange={e => setFile(e.target.files?.[0] ?? null)}/></label><button disabled={!file || busy || disabled}>{busy ? 'Проверяем и импортируем…' : 'Импортировать CSV'}</button></form>
     {error && <div className="error" role="alert">{error}</div>}{success && <p role="status">{success}</p>}
     <details><summary>Какие столбцы нужны?</summary><p>Статистическое время; Средняя скорость ветра(m/s); Нормализованная активная мощность; Средняя температура окружающей среды(°C).</p><p>Разделитель — запятая; десятичный знак — точка. Время: YYYY-MM-DD HH:MM:SS, шаг 10 минут. Мощность в диапазоне 0–1. Файлы организаторов подходят без изменений.</p></details>
   </section>;
 }
 
-type AgentReport = {id: string; status: string; summary?: string; error?: string; input_tokens: number; output_tokens: number; steps: {step: number; tool: string; result: Record<string, unknown>}[]};
-function AgentPanel({turbine}: {turbine: Dataset}) {
-  const [configured, setConfigured] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [report, setReport] = useState<AgentReport | null>(null);
-  useEffect(() => {
-    let active = true;
-    api<{configured: boolean}>('/api/agent/status').then(s => {if(active) setConfigured(s.configured);}).catch(e => {if(active) setError(e.message);});
-    api<{items: AgentReport[]}>(`/api/agent/runs?turbine_id=${turbine.id}`).then(s => {if(active) setReport(s.items[0] ?? null);}).catch(e => {if(active) setError(e.message);});
-    return () => {active=false;};
-  }, [turbine.id]);
-  return <section className="panel"><div className="section-heading"><div><div className="eyebrow">Решения и инструменты</div><h2>Запуск агента</h2></div><span className="tag">{configured ? 'OpenAI подключён' : 'Ключ не настроен'}</span></div>
-    <p className="muted">Агент проверит данные, попробует получить погоду и сохранит резервный прогноз на 48 часов. Baseline повторяет последнюю известную мощность; обученная погодная модель ещё не интегрирована.</p>
-    <form className="filters" onSubmit={async e => {e.preventDefault(); const f = new FormData(e.currentTarget); setBusy(true); setError(''); setReport(null);
-      try {setReport(await api<AgentReport>('/api/agent/runs', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({turbine_id:turbine.id, issue_at:String(f.get('issue'))+':00+00:00', measurement_timezone:f.get('timezone') || null, timestamp_semantics:f.get('semantics') || null, event:f.get('event')})}));}
-      catch(e) {setError((e as Error).message);} finally {setBusy(false);}
-    }}>
-      <label>Момент расчёта, UTC<input name="issue" type="datetime-local" step="3600" required/></label>
-      <label>Часовой пояс CSV<select name="timezone"><option value="">Не подтверждён</option><option value="Asia/Almaty">Asia/Almaty (по вашему выбору)</option><option value="UTC">UTC</option></select></label>
-      <label>Отметка времени CSV<select name="semantics"><option value="">Не подтверждена</option><option value="interval_start">Начало 10-минутного интервала</option><option value="interval_end">Конец 10-минутного интервала</option></select></label>
-      <label>Событие<select name="event"><option value="manual">Ручной запуск</option><option value="data_updated">Обновились измерения</option><option value="weather_updated">Обновилась погода</option></select></label>
-      <button disabled={!configured || busy || !turbine.has_data}>{busy ? 'Агент работает…' : 'Запустить агента'}</button>
-    </form>
-    <div className="notice compact">Запуск использует API-кредиты. До 10 шагов. Выбирайте часовой пояс и смысл отметки только если они известны: без них расчёт будет остановлен. Измерения считаются доступными в конце интервала, задержка доставки пока не моделируется.</div>
-    {error && <div className="error" role="alert">{error}</div>}
-    {report && <div><p><strong>Статус: {report.status}</strong> · токены: {n(report.input_tokens)} вход / {n(report.output_tokens)} выход</p><p style={{whiteSpace:'pre-wrap'}}>{report.summary || report.error}</p>{report.steps.map(s => <details key={s.step}><summary>{s.step}. {s.tool} — {s.result.ok ? 'выполнено' : String(s.result.code ?? 'ошибка')}</summary><pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{JSON.stringify(s.result,null,2)}</pre></details>)}{report.status==='forecast_saved' && <p><a href={`/api/forecasts/${report.id}`}>Скачать прогноз JSON ↓</a></p>}</div>}
-  </section>;
-}
-
 function App() {
-  const [activeSection, setActiveSection] = useState('measurements');
+  const pathname = window.location.pathname.replace(/\/$/, '');
+  const page = pathname === '/turbines/new' ? 'new-turbine' : pathname === '/sources' ? 'sources' : pathname === '/forecast' ? 'forecast' : pathname === '/weather' ? 'weather' : 'turbines';
+  const pageTitle = {'new-turbine':'Добавить турбину',turbines:'Турбины',forecast:'Прогноз',weather:'Архив погоды',sources:'Источники'}[page];
+  useEffect(() => { document.title = `NoIdea · ${pageTitle}`; }, [pageTitle]);
   useEffect(() => {
-    const update = () => {
-      let active = 'measurements';
-      for (const section of ['measurements', 'weather', 'agent', 'sources']) {
-        const element = document.getElementById(section);
-        if (element && element.getBoundingClientRect().top <= window.innerHeight * 0.35) active = section;
-      }
-      setActiveSection(active);
-    };
-    window.addEventListener('scroll', update, {passive: true});
-    window.addEventListener('resize', update);
-    update();
-    return () => { window.removeEventListener('scroll', update); window.removeEventListener('resize', update); };
+    if (!pathname) {
+      const legacy:Record<string,string> = {'#sources':'/sources','#agent':'/forecast','#weather':'/weather'};
+      window.location.replace(legacy[window.location.hash] || '/turbines');
+    }
   }, []);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [id, setId] = useState<number | null>(null);
-  const [adding, setAdding] = useState(false);
+  const [turbineActionBusy, setTurbineActionBusy] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
+  const [trashVersion, setTrashVersion] = useState(0);
   const [start, setStart] = useState('2026-01-25');
   const [end, setEnd] = useState('2026-01-31');
   const [points, setPoints] = useState<Point[]>([]);
@@ -207,16 +189,29 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [catalogError, setCatalogError] = useState('');
+  const [sourcesBusy, setSourcesBusy] = useState(false);
   const request = useRef(0);
+  const catalogRequest = useRef(0);
   async function refresh(selectId?: number) {
+    const current = ++catalogRequest.current;
     try {
       const data = await api<{items: Dataset[]}>('/api/turbines');
+      if (current !== catalogRequest.current) return;
       setDatasets(data.items); setCatalogError('');
-      if (selectId !== undefined) setId(selectId);
-      else if (id === null && data.items.length) setId(data.items[0].id);
-    } catch (e) { setCatalogError((e as Error).message); }
+      const requested = selectId ?? id ?? (Number(new URLSearchParams(window.location.search).get('selected')) || Number(localStorage.getItem('wind-selected-turbine')));
+      setId(data.items.some(t => t.id === requested) ? requested : data.items[0]?.id ?? null);
+    } catch (e) { if (current === catalogRequest.current) setCatalogError((e as Error).message); }
   }
+  async function onDeleted(deletedId: number) {
+    setDatasets(current => current.filter(t => t.id !== deletedId));
+    setId(current => current === deletedId ? null : current);
+    if (Number(localStorage.getItem('wind-selected-turbine')) === deletedId) localStorage.removeItem('wind-selected-turbine');
+    setTrashVersion(value => value + 1);
+    await refresh();
+  }
+
   useEffect(() => { void refresh(); }, []);
+  useEffect(() => { if (id !== null) localStorage.setItem('wind-selected-turbine', String(id)); }, [id]);
   async function loadSeries(turbine: number, from: string, to: string) {
     const current = ++request.current; setLoading(true); setError(''); setPoints([]);
     try {
@@ -228,7 +223,7 @@ function App() {
   useEffect(() => {
     ++request.current; setPoints([]); setError(''); setLoading(false);
     const selected = datasets.find(t => t.id === id);
-    if (selected?.has_data) {
+    if (page === 'turbines' && selected?.has_data) {
       const last = selected.end.slice(0,10);
       const first = new Date(Date.parse(last) - 6 * 86400000).toISOString().slice(0,10);
       setStart(first); setEnd(last); void loadSeries(selected.id, first, last);
@@ -237,18 +232,40 @@ function App() {
   const d = datasets.find(d => d.id === id);
   const metrics: Record<string, [string, string]> = {power: ['Мощность', 'доля номинала'], wind_speed: ['Ветер', 'м/с'], temperature: ['Температура', '°C']};
   return <div className="app">
-    <aside><div className="brand"><span className="brand-icon">⌁</span><div>NoIdea<span>WIND INTELLIGENCE</span></div></div><div className="nav-label">Рабочее пространство</div><nav aria-label="Разделы страницы">{[
-      ['measurements', '▦', 'Данные ВЭС'], ['weather', '↗', 'Архив погоды'], ['agent', '◎', 'Агент и прогноз'], ['sources', '⚙', 'Источники'],
+    <aside><div className="brand"><span className="brand-icon">⌁</span><div>NoIdea<span>WIND INTELLIGENCE</span></div></div><div className="nav-label">Рабочее пространство</div><nav aria-label="Навигация">{[
+      ['turbines', '▦', 'Турбины'], ['forecast', '◎', 'Прогноз'], ['weather', '↗', 'Архив погоды'], ['sources', '⚙', 'Источники'],
     ].map(([section, icon, label]) => {
-      const enabled = section === 'measurements' || section === 'sources' || !!d;
-      return <a key={section} className={`nav-item${activeSection === section ? ' selected' : ''}`} href={enabled ? `#${section}` : undefined} aria-current={activeSection === section ? 'location' : undefined} aria-disabled={!enabled} title={enabled ? undefined : 'Сначала добавьте турбину'}>{icon} <span>{label}</span></a>;
+      const selected = page === section || (page === 'new-turbine' && section === 'turbines');
+      return <a key={section} className={`nav-item${selected ? ' selected' : ''}`} href={`/${section}`} aria-current={selected ? 'page' : undefined}>{icon} <span>{label}</span></a>;
     })}</nav><div className="aside-bottom"><span className="dot"/> HackAlem AI<div>Этап 1 · Исследование данных</div></div></aside>
-    <main><header><span>Проект / <strong>Данные ВЭС</strong></span><a href="/docs" target="_blank" rel="noreferrer">API ↗</a></header>
-      <div className="page-title" id="measurements"><div><div className="eyebrow">От измерений к прогнозу</div><h1>Данные ветропарка</h1><p>Добавьте турбину и загрузите измерения, чтобы начать работу с данными.</p></div><span className="stage">Этап 01 / Данные</span></div>
-      <div className="turbines">{datasets.map(t => <button key={t.id} className={t.id===id?'active':''} onClick={() => setId(t.id)}>{t.name}<span>{t.has_data ? 'Измерения загружены' : 'Нет измерений'}</span></button>)}<button onClick={() => setAdding(!adding)}>+ Добавить турбину</button></div>
-      {(adding || !datasets.length) && <TurbineForm onCreated={async t => { setAdding(false); await refresh(t.id); }}/>}
-      {!datasets.length && <div className="panel"><h2>Начните со своей турбины</h2><p className="muted">1. Укажите название и координаты. 2. Импортируйте CSV с измерениями. 3. Проверьте данные и загрузите архив погоды.</p><div className="notice compact">После импорта доступен агент с резервным baseline-прогнозом. Обученная погодная модель ещё не интегрирована.</div></div>}
-      {d && <ImportPanel key={`import-${d.id}`} turbine={d} onImported={() => refresh(d.id)}/>}
+    <main><header><span>Проект / <strong>{pageTitle}</strong></span><a href="/docs" target="_blank" rel="noreferrer">API ↗</a></header>
+      {page === 'new-turbine' ? <>
+        <div className="page-title"><div><div className="eyebrow">Новая турбина</div><h1>Добавить турбину</h1><p>Укажите название и местоположение.</p></div></div>
+        <TurbineForm onCancel={() => window.location.assign('/turbines')} onCreated={async t => { window.location.assign(`/turbines?selected=${t.id}`); }}/>
+      </> : page === 'sources' ? <>
+        <div className="page-title"><div><div className="eyebrow">Погодные данные</div><h1>Источники</h1><p>Выберите источник или добавьте новый сайт.</p></div></div>
+        {catalogError && <div className="error" role="alert">{catalogError}</div>}
+        {datasets.length > 0 && <label className="source-turbine">Турбина для подбора данных<select disabled={sourcesBusy} value={id??''} onChange={e=>setId(Number(e.target.value))}>{datasets.map(t=><option key={t.id} value={t.id}>{t.name}{t.has_data?'':' · нет измерений'}</option>)}</select></label>}
+        <SourcesPanel turbine={d} onBusyChange={setSourcesBusy}/>
+      </> : page === 'forecast' ? <>
+        <div className="page-title"><div><div className="eyebrow">Расчёт мощности</div><h1>Прогноз</h1><p>Выберите турбины и период, на который нужен прогноз.</p></div></div>
+        {catalogError && <div className="error" role="alert">{catalogError}</div>}
+        <ForecastPage turbines={datasets}/>
+      </> : page === 'weather' ? <>
+        <div className="page-title"><div><div className="eyebrow">Open-Meteo / ECMWF</div><h1>Архив погоды</h1><p>Просмотр отдельных исторических выпусков прогноза для выбранной турбины.</p></div></div>
+        {catalogError && <div className="error" role="alert">{catalogError}</div>}
+        {datasets.length > 0 ? <>
+          <label className="source-turbine">Турбина<select value={id??''} onChange={e=>setId(Number(e.target.value))}>{datasets.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+          {d && <WeatherPanel key={d.id} turbineId={d.id}/>}
+        </> : <section className="panel"><h2>Добавьте турбину</h2><p className="muted">Координаты турбины нужны для загрузки погодных данных.</p><a href="/turbines">Перейти к турбинам →</a></section>}
+      </> : <>
+      <div className="page-title" id="measurements"><div><div className="eyebrow">От измерений к прогнозу</div><h1>Турбины</h1><p>Добавьте турбину и загрузите измерения, чтобы начать работу с данными.</p></div><span className="stage">Этап 01 / Данные</span></div>
+      <div className="turbines">{datasets.map(t => <button key={t.id} className={t.id===id?'active':''} disabled={turbineActionBusy || importBusy} onClick={() => setId(t.id)}>{t.name}<span>{t.has_data ? 'Измерения загружены' : 'Нет измерений'}</span></button>)}<a className="add-turbine-link" href="/turbines/new">+ Добавить турбину</a></div>
+      {d && <TurbineDelete key={d.id} turbine={d} disabled={turbineActionBusy || importBusy} onBusyChange={setTurbineActionBusy} onDeleted={onDeleted}/>}
+      <DeletedTurbines version={trashVersion} disabled={turbineActionBusy || importBusy} onBusyChange={setTurbineActionBusy} onRestored={async restoredId => { await refresh(restoredId); }}/>
+      {!datasets.length && <div className="panel"><h2>Начните со своей турбины</h2><p className="muted">1. Укажите название и координаты. 2. Импортируйте CSV с измерениями. 3. Проверьте данные и загрузите архив погоды.</p><div className="notice compact">После импорта откройте «Прогноз»: там показано, есть ли проверенная ML-модель для этой турбины. Если её нет, доступен резервный прогноз по последней мощности.</div></div>}
+      {d && <ImportPanel key={`import-${d.id}`} turbine={d} onImported={() => refresh(d.id)} disabled={turbineActionBusy} onBusyChange={setImportBusy}/>}
+      {d?.has_data && <div className="turbine-actions"><a href="/forecast">Получить прогноз →</a><a href="/sources">Подключить источник погоды →</a></div>}
       {catalogError && <div className="error" role="alert">{catalogError}</div>}
       {d?.has_data && <><div className="stats">
         <div><span>Исходных измерений</span><strong>{n(d.rows)}</strong><small>Шаг 10 минут</small></div>
@@ -266,17 +283,15 @@ function App() {
         {loading ? <div className="empty" role="status">Загружаем измерения…</div> : <Chart points={points} metric={metric} unit={metrics[metric][1]} fixed={metric==='power'?[0,1]:undefined}/>}
         <div className="chart-footer"><span><i/> Полные часы · среднее 6 измерений</span><span>Неполные часы — разрывы, не нули</span></div>
       </section>
-      <div className="notice"><strong>Время источника не подтверждено.</strong> Предполагается Asia/Almaty: UTC+6 до марта 2024, затем UTC+5. Измерения пока не совмещены с погодой UTC. Мощность нормализована, это не кВт·ч.</div>
+      <div className="notice"><strong>Время источника не подтверждено.</strong> Сопоставление с погодой поддерживает постоянный UTC+6, но настройки часов оборудования ещё не подтверждены. Измерения пока не совмещены с погодой UTC. Мощность нормализована, это не кВт·ч.</div>
       </>}
-      {d && <div id="weather"><WeatherPanel key={d.id} turbineId={d.id}/></div>}
-      {d && <div id="agent"><AgentPanel key={`agent-${d.id}`} turbine={d}/></div>}
       {d?.has_data && <section className="panel"><div className="section-heading"><div><div className="eyebrow">Контроль качества</div><h2>Полнота и происхождение</h2></div><span className="tag">Без заполнения пропусков</span></div>
         <div className="quality-bar"><span style={{width:`${100*d.complete_hours/d.hours}%`}}/><span style={{width:`${100*d.partial_hours/d.hours}%`}}/><span style={{width:`${100*d.missing_hours/d.hours}%`}}/></div>
         <div className="quality-legend"><span>● Полные: {n(d.complete_hours)}</span><span>● Неполные: {n(d.partial_hours)}</span><span>● Нет валидных значений: {n(d.missing_hours)}</span></div>
         {d.largest_gaps.length>0 ? <div className="table-wrap"><table><caption>Крупнейшие разрывы исходного ряда</caption><thead><tr><th>Первая отсутствующая отметка</th><th>Последняя отсутствующая отметка</th><th>Пропущено × 10 мин</th></tr></thead><tbody>{d.largest_gaps.map(g=><tr key={g.start}><td>{dt(g.start)}</td><td>{dt(g.end)}</td><td>{n(g.missing_slots)}</td></tr>)}</tbody></table></div> : <p className="muted">Пропусков временных отметок в импортированном периоде нет.</p>}
         <details><summary>Исходный файл и контрольная сумма</summary><p>{d.source_name}</p><code>SHA-256: {d.sha256}</code></details>
       </section>}
-      <SourcesPanel turbine={d}/>
+      </>}
       <footer>NoIdea / HackAlem AI <span>Ваши файлы сохраняются на сервере приложения. LLM запускается только по кнопке.</span></footer>
     </main>
   </div>;
